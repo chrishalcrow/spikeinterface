@@ -39,6 +39,7 @@ from .generate import (
     create_sorting_npz,
     generate_snippets,
     synthesize_random_firings,
+    synthesize_poisson_spike_vector,
     inject_some_duplicate_units,
     inject_some_split_units,
     synthetize_spike_train_bad_isi,
@@ -101,21 +102,19 @@ from .recording_tools import (
     get_chunk_with_margin,
     order_channels_by_depth,
 )
-from .sorting_tools import spike_vector_to_spike_trains, random_spikes_selection
+from .sorting_tools import spike_vector_to_spike_trains
 
-from .waveform_tools import extract_waveforms_to_buffers, estimate_templates, estimate_templates_average
+from .waveform_tools import extract_waveforms_to_buffers
 from .snippets_tools import snippets_from_sorting
 
 # waveform extractor
-# Important not for compatibility!!
-# This wil be commented after 0.100 relase but the module will not be removed.
-# from .waveform_extractor import (
-#     WaveformExtractor,
-#     BaseWaveformExtractorExtension,
-# extract_waveforms,
-# load_waveforms,
-#     precompute_sparsity,
-# )
+from .waveform_extractor import (
+    WaveformExtractor,
+    BaseWaveformExtractorExtension,
+    extract_waveforms,
+    load_waveforms,
+    precompute_sparsity,
+)
 
 # retrieve datasets
 from .datasets import download_dataset
@@ -136,26 +135,10 @@ from .template_tools import (
     get_template_extremum_channel,
     get_template_extremum_channel_peak_shift,
     get_template_extremum_amplitude,
+    get_template_channel_sparsity,
 )
 
 # channel sparsity
 from .sparsity import ChannelSparsity, compute_sparsity, estimate_sparsity
 
 from .template import Templates
-
-# SortingAnalyzer and AnalyzerExtension
-from .sortinganalyzer import SortingAnalyzer, AnalyzerExtension, create_sorting_analyzer, load_sorting_analyzer
-from .analyzer_extension_core import (
-    ComputeWaveforms,
-    compute_waveforms,
-    ComputeTemplates,
-    compute_templates,
-    ComputeFastTemplates,
-    compute_fast_templates,
-    ComputeNoiseLevels,
-    compute_noise_levels,
-)
-
-# Important not for compatibility!!
-# This wil be uncommented after 0.100
-from .waveforms_extractor_backwards_compatibility import extract_waveforms, load_waveforms
