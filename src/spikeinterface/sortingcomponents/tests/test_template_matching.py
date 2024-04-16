@@ -16,7 +16,8 @@ def get_sorting_analyzer():
     recording, sorting = make_dataset()
     sorting_analyzer = create_sorting_analyzer(sorting, recording, sparse=False)
     sorting_analyzer.compute("random_spikes")
-    sorting_analyzer.compute("templates", **job_kwargs)
+    # PUTTING OPERATORS = ["AVERAGE"] IS A HACK!!!
+    sorting_analyzer.compute("templates", operators = ["average"], **job_kwargs)
     sorting_analyzer.compute("noise_levels")
     return sorting_analyzer
 
