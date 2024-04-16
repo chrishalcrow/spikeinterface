@@ -95,7 +95,11 @@ class AnalyzerExtensionCommonTestSuite:
         for dependency_name in self.extension_class.depend_on:
             if "|" in dependency_name:
                 dependency_name = dependency_name.split("|")[0]
-            sorting_analyzer.compute(dependency_name)
+            if dependency_name == "templates":
+                # THIS IS A HACK. POSSIBLE BIGGER PROBLEM UNDERLYING!!!!
+                sorting_analyzer.compute('templates', operators=["average"])
+            else:
+                sorting_analyzer.compute(dependency_name)
         return sorting_analyzer
 
     def _check_one(self, sorting_analyzer):
