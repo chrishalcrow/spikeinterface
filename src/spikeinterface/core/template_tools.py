@@ -85,31 +85,25 @@ def get_template_amplitudes(
     unit_ids = templates_or_sorting_analyzer.unit_ids
     before = _get_nbefore(templates_or_sorting_analyzer)
 
-    peak_values = {}
-
+    # templates_array is 3-dimensional array with: units, samples, channels
     templates_array = get_dense_templates_array(templates_or_sorting_analyzer, return_scaled=return_scaled)
 
-    for unit_ind, unit_id in enumerate(unit_ids):
-        template = templates_array[unit_ind, :, :]
+    if mode == "extremum":
+        if peak_sign == "both":
+            values = np.max(np.abs(templates_array), axis=1)
+        elif peak_sign == "neg":
+            values = -np.min(templates_array, axis=1)
+        elif peak_sign == "pos":
+            values = np.max(templates_array, axis=1)
+    elif mode == "at_index":
+        if peak_sign == "both":
+            values = np.abs(templates_array[:, before, :])
+        elif peak_sign == "neg":
+            values = -templates_array[:, before, :]
+        elif peak_sign == "pos":
+            values = templates_array[:, before, :]
 
-        if mode == "extremum":
-            if peak_sign == "both":
-                values = np.max(np.abs(template), axis=0)
-            elif peak_sign == "neg":
-                values = -np.min(template, axis=0)
-            elif peak_sign == "pos":
-                values = np.max(template, axis=0)
-        elif mode == "at_index":
-            if peak_sign == "both":
-                values = np.abs(template[before, :])
-            elif peak_sign == "neg":
-                values = -template[before, :]
-            elif peak_sign == "pos":
-                values = template[before, :]
-
-        peak_values[unit_id] = values
-
-    return peak_values
+    return dict(zip(unit_ids, values))
 
 
 def get_template_extremum_channel(
