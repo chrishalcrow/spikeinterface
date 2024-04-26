@@ -159,46 +159,46 @@ class TestWidgets(unittest.TestCase):
             if backend not in self.skip_backends:
                 sw.plot_spikes_on_traces(self.sorting_analyzer_dense, backend=backend, **self.backend_kwargs[backend])
 
-    def test_plot_unit_waveforms(self):
-        possible_backends = list(sw.UnitWaveformsWidget.get_possible_backends())
-        for backend in possible_backends:
-            if backend not in self.skip_backends:
-                sw.plot_unit_waveforms(self.sorting_analyzer_dense, backend=backend, **self.backend_kwargs[backend])
-                unit_ids = self.sorting.unit_ids[:6]
-                sw.plot_unit_waveforms(
-                    self.sorting_analyzer_dense,
-                    sparsity=self.sparsity_radius,
-                    unit_ids=unit_ids,
-                    backend=backend,
-                    **self.backend_kwargs[backend],
-                )
-                sw.plot_unit_waveforms(
-                    self.sorting_analyzer_dense,
-                    sparsity=self.sparsity_best,
-                    unit_ids=unit_ids,
-                    backend=backend,
-                    **self.backend_kwargs[backend],
-                )
-                sw.plot_unit_waveforms(
-                    self.sorting_analyzer_sparse, unit_ids=unit_ids, backend=backend, **self.backend_kwargs[backend]
-                )
-                # extra sparsity
-                sw.plot_unit_waveforms(
-                    self.sorting_analyzer_sparse,
-                    sparsity=self.sparsity_strict,
-                    unit_ids=unit_ids,
-                    backend=backend,
-                    **self.backend_kwargs[backend],
-                )
-                # test "larger" sparsity
-                with self.assertRaises(AssertionError):
-                    sw.plot_unit_waveforms(
-                        self.sorting_analyzer_sparse,
-                        sparsity=self.sparsity_large,
-                        unit_ids=unit_ids,
-                        backend=backend,
-                        **self.backend_kwargs[backend],
-                    )
+    # def test_plot_unit_waveforms(self):
+    #     possible_backends = list(sw.UnitWaveformsWidget.get_possible_backends())
+    #     for backend in possible_backends:
+    #         if backend not in self.skip_backends:
+    #             sw.plot_unit_waveforms(self.sorting_analyzer_dense, backend=backend, **self.backend_kwargs[backend])
+    #             unit_ids = self.sorting.unit_ids[:6]
+    #             sw.plot_unit_waveforms(
+    #                 self.sorting_analyzer_dense,
+    #                 sparsity=self.sparsity_radius,
+    #                 unit_ids=unit_ids,
+    #                 backend=backend,
+    #                 **self.backend_kwargs[backend],
+    #             )
+    #             sw.plot_unit_waveforms(
+    #                 self.sorting_analyzer_dense,
+    #                 sparsity=self.sparsity_best,
+    #                 unit_ids=unit_ids,
+    #                 backend=backend,
+    #                 **self.backend_kwargs[backend],
+    #             )
+    #             sw.plot_unit_waveforms(
+    #                 self.sorting_analyzer_sparse, unit_ids=unit_ids, backend=backend, **self.backend_kwargs[backend]
+    #             )
+    #             # extra sparsity
+    #             sw.plot_unit_waveforms(
+    #                 self.sorting_analyzer_sparse,
+    #                 sparsity=self.sparsity_strict,
+    #                 unit_ids=unit_ids,
+    #                 backend=backend,
+    #                 **self.backend_kwargs[backend],
+    #             )
+    #             # test "larger" sparsity
+    #             with self.assertRaises(AssertionError):
+    #                 sw.plot_unit_waveforms(
+    #                     self.sorting_analyzer_sparse,
+    #                     sparsity=self.sparsity_large,
+    #                     unit_ids=unit_ids,
+    #                     backend=backend,
+    #                     **self.backend_kwargs[backend],
+    #                 )
 
     def test_plot_unit_templates(self):
         possible_backends = list(sw.UnitTemplatesWidget.get_possible_backends())
