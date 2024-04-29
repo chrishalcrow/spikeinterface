@@ -21,9 +21,9 @@ def get_sorting_analyzer():
     return sorting_analyzer
 
 
-# @pytest.fixture(name="sorting_analyzer", scope="module")
-# def sorting_analyzer_fixture():
-#     return get_sorting_analyzer()
+@pytest.fixture(name="sorting_analyzer", scope="module")
+def sorting_analyzer_fixture():
+    return get_sorting_analyzer()
 
 
 @pytest.mark.parametrize("method", matching_methods.keys())
