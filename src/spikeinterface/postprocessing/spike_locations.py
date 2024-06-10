@@ -87,8 +87,7 @@ class ComputeSpikeLocations(AnalyzerExtension):
         old_unit_ids = self.sorting_analyzer.unit_ids
         unit_inds = np.flatnonzero(np.isin(old_unit_ids, unit_ids))
 
-        extremum_channel_inds = get_template_extremum_channel(self.sorting_analyzer, outputs="index")
-        spikes = self.sorting_analyzer.sorting.to_spike_vector(extremum_channel_inds=extremum_channel_inds)
+        spikes = self.sorting_analyzer.sorting.to_spike_vector()
 
         spike_mask = np.isin(spikes["unit_index"], unit_inds)
         new_spike_locations = self.data["spike_locations"][spike_mask]
@@ -100,7 +99,7 @@ class ComputeSpikeLocations(AnalyzerExtension):
         recording = self.sorting_analyzer.recording
         sorting = self.sorting_analyzer.sorting
         peak_sign = self.params["spike_retriver_kwargs"]["peak_sign"]
-        extremum_channels_indices = get_template_extremum_channel(
+        self.extremum_channels_indices = get_template_extremum_channel(
             self.sorting_analyzer, peak_sign=peak_sign, outputs="index"
         )
 
