@@ -154,7 +154,6 @@ def _sorting_analyzer_simple():
     sorting_analyzer.compute("noise_levels")
     sorting_analyzer.compute("waveforms", **job_kwargs)
     sorting_analyzer.compute("templates")
-    sorting_analyzer.compute("principal_components", n_components=5, mode="by_channel_local", **job_kwargs)
     sorting_analyzer.compute("spike_amplitudes", **job_kwargs)
 
     return sorting_analyzer
@@ -574,6 +573,7 @@ if __name__ == "__main__":
     print(sorting_analyzer)
 
     test_unit_structure_in_output(_small_sorting_analyzer())
+    test_unit_id_order_independence(_small_sorting_analyzer())
 
     # test_calculate_firing_rate_num_spikes(sorting_analyzer)
     # test_calculate_snrs(sorting_analyzer)
