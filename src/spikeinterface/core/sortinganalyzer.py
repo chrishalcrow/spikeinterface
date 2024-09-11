@@ -1124,7 +1124,9 @@ class SortingAnalyzer:
         return self.sorting.get_num_units()
 
     ## extensions zone
-    def compute(self, input, save=True, extension_params=None, verbose=False, **kwargs) -> "AnalyzerExtension | None":
+    def compute(
+        self, input, save=True, extension_params=None, verbose=False, compute_parents=False, **kwargs
+    ) -> "AnalyzerExtension | None":
         """
         Compute one extension or several extensiosn.
         Internally calls compute_one_extension() or compute_several_extensions() depending on the input type.
@@ -1142,6 +1144,8 @@ class SortingAnalyzer:
         extension_params : dict or None, default: None
             If input is a list, this parameter can be used to specify parameters for each extension.
             The extension_params keys must be included in the input list.
+        compute_parents : bool, default: False
+            If True, computes dependences of given extensions, using default parameters
         **kwargs:
             All other kwargs are transmitted to extension.set_params() (if input is a string) or job_kwargs
 
@@ -1172,11 +1176,13 @@ extension_params={"waveforms":{"ms_before":1.5, "ms_after": "2.5"}}\
 
         """
         if isinstance(input, str):
-            return self.compute_one_extension(extension_name=input, save=save, verbose=verbose, **kwargs)
-        elif isinstance(input, dict):
+            input = [input]
+        if isinstance(input, dict):
             params_, job_kwargs = split_job_kwargs(kwargs)
             assert len(params_) == 0, "Too many arguments for SortingAnalyzer.compute_several_extensions()"
-            self.compute_several_extensions(extensions=input, save=save, verbose=verbose, **job_kwargs)
+            self.compute_several_extensions(
+                extensions=input, save=save, verbose=verbose, compute_parents=compute_parents, **job_kwargs
+            )
         elif isinstance(input, list):
             params_, job_kwargs = split_job_kwargs(kwargs)
             assert len(params_) == 0, "Too many arguments for SortingAnalyzer.compute_several_extensions()"
@@ -1187,7 +1193,9 @@ extension_params={"waveforms":{"ms_before":1.5, "ms_after": "2.5"}}\
                         ext_name in input
                     ), f"SortingAnalyzer.compute(): Parameters specified for {ext_name}, which is not in the specified {input}"
                     extensions[ext_name] = ext_params
-            self.compute_several_extensions(extensions=extensions, save=save, verbose=verbose, **job_kwargs)
+            self.compute_several_extensions(
+                extensions=extensions, save=save, verbose=verbose, compute_parents=compute_parents, **job_kwargs
+            )
         else:
             raise ValueError("SortingAnalyzer.compute() need str, dict or list")
 
@@ -1258,7 +1266,7 @@ extension_params={"waveforms":{"ms_before":1.5, "ms_after": "2.5"}}\
         self.extensions[extension_name] = extension_instance
         return extension_instance
 
-    def compute_several_extensions(self, extensions, save=True, verbose=False, **job_kwargs):
+    def compute_several_extensions(self, extensions, save=True, verbose=False, compute_parents=False, **job_kwargs):
         """
         Compute several extensions
 
@@ -1274,6 +1282,8 @@ extension_params={"waveforms":{"ms_before":1.5, "ms_after": "2.5"}}\
             It the extension can be saved then it is saved.
             If not then the extension will only live in memory as long as the object is deleted.
             save=False is convenient to try some parameters without changing an already saved extension.
+        compute_parents : bool, default: False
+            If True, computes dependences of given extensions, using default parameters
 
         Returns
         -------
@@ -1286,6 +1296,16 @@ extension_params={"waveforms":{"ms_before":1.5, "ms_after": "2.5"}}\
         >>> sorting_analyzer.compute_several_extensions({"waveforms": {"ms_before": 1.2}, "templates" : {"operators": ["average", "std"]}})
 
         """
+
+        if compute_parents is True:
+            required_extensions = []
+            for extension_name in extensions.keys():
+                required_extensions = required_extensions + add_parents_to_list(extension_name, [extension_name])
+            required_extensions = np.unique(required_extensions)
+
+            for required_extension in required_extensions:
+                if required_extension not in extensions.keys():
+                    extensions[required_extension] = {}
 
         sorted_extensions = _sort_extensions_by_dependency(extensions)
 
@@ -2226,3 +2246,16 @@ _builtin_extensions = {
     # from quality metrics
     "quality_metrics": "spikeinterface.qualitymetrics",
 }
+
+
+def add_parents_to_list(ext_name, my_list):
+    dependencies_list = get_extension_class(ext_name).depend_on
+    if dependencies_list == []:
+        return my_list
+    else:
+        for dep in dependencies_list:
+            if "|" in dep:
+                dep = dep.split("|")[0]
+            (my_set := set(my_list)).add(dep)
+            my_list = add_parents_to_list(dep, list(my_set))
+        return my_list
