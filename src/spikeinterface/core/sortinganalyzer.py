@@ -1176,7 +1176,6 @@ extension_params={"waveforms":{"ms_before":1.5, "ms_after": "2.5"}}\
 
         """
         if isinstance(input, str):
-            print("hello")
             input = [input]
         if isinstance(input, dict):
             params_, job_kwargs = split_job_kwargs(kwargs)
