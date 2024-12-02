@@ -610,9 +610,7 @@ def test_calculate_rp_violations(sorting_analyzer_violations):
 def test_synchrony_metrics(sorting_analyzer_simple):
     sorting_analyzer = sorting_analyzer_simple
     sorting = sorting_analyzer.sorting
-    synchrony_sizes = (2, 3, 4)
-    synchrony_metrics = compute_synchrony_metrics(sorting_analyzer, synchrony_sizes=synchrony_sizes)
-    print(synchrony_metrics)
+    synchrony_metrics = compute_synchrony_metrics(sorting_analyzer)
 
     # check returns
     for size in synchrony_sizes:
@@ -625,10 +623,8 @@ def test_synchrony_metrics(sorting_analyzer_simple):
         sorting_sync = add_synchrony_to_sorting(sorting, sync_event_ratio=sync_level)
         sorting_analyzer_sync = create_sorting_analyzer(sorting_sync, sorting_analyzer.recording, format="memory")
 
-        previous_synchrony_metrics = compute_synchrony_metrics(
-            previous_sorting_analyzer, synchrony_sizes=synchrony_sizes
-        )
-        current_synchrony_metrics = compute_synchrony_metrics(sorting_analyzer_sync, synchrony_sizes=synchrony_sizes)
+        previous_synchrony_metrics = compute_synchrony_metrics(previous_sorting_analyzer)
+        current_synchrony_metrics = compute_synchrony_metrics(sorting_analyzer_sync)
         print(current_synchrony_metrics)
         # check that all values increased
         for i, col in enumerate(previous_synchrony_metrics._fields):
@@ -647,10 +643,7 @@ def test_synchrony_metrics_unit_id_subset(sorting_analyzer_simple):
 
     unit_ids_subset = [3, 7]
 
-    synchrony_sizes = (2,)
-    (synchrony_metrics,) = compute_synchrony_metrics(
-        sorting_analyzer_simple, synchrony_sizes=synchrony_sizes, unit_ids=unit_ids_subset
-    )
+    (synchrony_metrics,) = compute_synchrony_metrics(sorting_analyzer_simple, unit_ids=unit_ids_subset)
 
     assert list(synchrony_metrics.keys()) == [3, 7]
 
@@ -659,8 +652,7 @@ def test_synchrony_metrics_no_unit_ids(sorting_analyzer_simple):
 
     # all_unit_ids = sorting_analyzer_simple.sorting.unit_ids
 
-    synchrony_sizes = (2,)
-    (synchrony_metrics,) = compute_synchrony_metrics(sorting_analyzer_simple, synchrony_sizes=synchrony_sizes)
+    (synchrony_metrics,) = compute_synchrony_metrics(sorting_analyzer_simple)
 
     assert np.all(list(synchrony_metrics.keys()) == sorting_analyzer_simple.unit_ids)
 
