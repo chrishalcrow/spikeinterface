@@ -39,7 +39,7 @@ from spikeinterface.qualitymetrics import (
     compute_firing_ranges,
     compute_amplitude_cv_metrics,
     compute_sd_ratio,
-    get_synchrony_counts,
+    _get_synchrony_counts,
     compute_quality_metrics,
 )
 
@@ -352,7 +352,7 @@ def test_synchrony_counts_no_sync():
     one_spike["sample_index"] = spike_times
     one_spike["unit_index"] = spike_units
 
-    sync_count = get_synchrony_counts(one_spike, np.array((2)), [0])
+    sync_count = _get_synchrony_counts(one_spike, [0])
 
     assert np.all(sync_count[0] == np.array([0]))
 
@@ -372,7 +372,7 @@ def test_synchrony_counts_one_sync():
     two_spikes["sample_index"] = np.concatenate((spike_indices, added_spikes_indices))
     two_spikes["unit_index"] = np.concatenate((spike_labels, added_spikes_labels))
 
-    sync_count = get_synchrony_counts(two_spikes, np.array((2)), [0, 1])
+    sync_count = _get_synchrony_counts(two_spikes, [0, 1])
 
     assert np.all(sync_count[0] == np.array([1, 1]))
 
@@ -392,7 +392,7 @@ def test_synchrony_counts_one_quad_sync():
     four_spikes["sample_index"] = np.concatenate((spike_indices, added_spikes_indices))
     four_spikes["unit_index"] = np.concatenate((spike_labels, added_spikes_labels))
 
-    sync_count = get_synchrony_counts(four_spikes, np.array((2, 4)), [0, 1, 2, 3])
+    sync_count = _get_synchrony_counts(four_spikes, [0, 1, 2, 3])
 
     assert np.all(sync_count[0] == np.array([1, 1, 1, 1]))
     assert np.all(sync_count[1] == np.array([1, 1, 1, 1]))
@@ -409,7 +409,7 @@ def test_synchrony_counts_not_all_units():
     three_spikes["sample_index"] = np.concatenate((spike_indices, added_spikes_indices))
     three_spikes["unit_index"] = np.concatenate((spike_labels, added_spikes_labels))
 
-    sync_count = get_synchrony_counts(three_spikes, np.array((2)), [0, 1, 2])
+    sync_count = _get_synchrony_counts(three_spikes, [0, 1, 2])
 
     assert np.all(sync_count[0] == np.array([0, 1, 1]))
 
@@ -612,6 +612,8 @@ def test_synchrony_metrics(sorting_analyzer_simple):
     sorting = sorting_analyzer.sorting
     synchrony_metrics = compute_synchrony_metrics(sorting_analyzer)
 
+    synchrony_sizes = np.array([2, 4, 8])
+
     # check returns
     for size in synchrony_sizes:
         assert f"sync_spike_{size}" in synchrony_metrics._fields
@@ -643,18 +645,17 @@ def test_synchrony_metrics_unit_id_subset(sorting_analyzer_simple):
 
     unit_ids_subset = [3, 7]
 
-    (synchrony_metrics,) = compute_synchrony_metrics(sorting_analyzer_simple, unit_ids=unit_ids_subset)
+    synchrony_metrics = compute_synchrony_metrics(sorting_analyzer_simple, unit_ids=unit_ids_subset)
 
-    assert list(synchrony_metrics.keys()) == [3, 7]
+    assert list(synchrony_metrics.sync_spike_2.keys()) == [3, 7]
+    assert list(synchrony_metrics.sync_spike_4.keys()) == [3, 7]
+    assert list(synchrony_metrics.sync_spike_8.keys()) == [3, 7]
 
 
 def test_synchrony_metrics_no_unit_ids(sorting_analyzer_simple):
 
-    # all_unit_ids = sorting_analyzer_simple.sorting.unit_ids
-
-    (synchrony_metrics,) = compute_synchrony_metrics(sorting_analyzer_simple)
-
-    assert np.all(list(synchrony_metrics.keys()) == sorting_analyzer_simple.unit_ids)
+    synchrony_metrics = compute_synchrony_metrics(sorting_analyzer_simple)
+    assert np.all(list(synchrony_metrics.sync_spike_2.keys()) == sorting_analyzer_simple.unit_ids)
 
 
 @pytest.mark.sortingcomponents

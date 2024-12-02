@@ -520,9 +520,9 @@ _default_params["sliding_rp_violation"] = dict(
 )
 
 
-def get_synchrony_counts(spikes, all_unit_ids):
+def _get_synchrony_counts(spikes, all_unit_ids, synchrony_sizes=np.array([2, 4, 8])):
     """
-    Compute synchrony counts, the number of simultaneous spikes with synchrony sizes 2, 4 and 8.
+    Compute synchrony counts, the number of simultaneous spikes with sizes `synchrony_sizes`.
 
     Parameters
     ----------
@@ -530,6 +530,8 @@ def get_synchrony_counts(spikes, all_unit_ids):
         Structured numpy array with fields ("sample_index", "unit_index", "segment_index").
     all_unit_ids : list or None, default: None
         List of unit ids to compute the synchrony metrics. Expecting all units.
+    synchrony_sizes : numpy array
+        The synchrony sizes to compute. Should be pre-sorted.
 
     Returns
     -------
@@ -541,8 +543,6 @@ def get_synchrony_counts(spikes, all_unit_ids):
     Based on concepts described in [Grün]_
     This code was adapted from `Elephant - Electrophysiology Analysis Toolkit <https://github.com/NeuralEnsemble/elephant/blob/master/elephant/spike_train_synchrony.py#L245>`_
     """
-
-    synchrony_sizes = np.array([2, 4, 8])
 
     synchrony_counts = np.zeros((np.size(synchrony_sizes), len(all_unit_ids)), dtype=np.int64)
 
@@ -601,7 +601,7 @@ def compute_synchrony_metrics(sorting_analyzer, unit_ids=None):
 
     spikes = sorting.to_spike_vector()
     all_unit_ids = sorting.unit_ids
-    synchrony_counts = get_synchrony_counts(spikes, synchrony_sizes, all_unit_ids)
+    synchrony_counts = _get_synchrony_counts(spikes, all_unit_ids, synchrony_sizes=synchrony_sizes)
 
     synchrony_metrics_dict = {}
     for sync_idx, synchrony_size in enumerate(synchrony_sizes):
