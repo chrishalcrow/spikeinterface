@@ -74,28 +74,27 @@ class AmplitudesWidget(BaseWidget):
         total_duration = sorting_analyzer.get_num_samples(segment_index) / sorting_analyzer.sampling_frequency
 
         spiketrains_segment = {}
-        for i, unit_id in enumerate(sorting.unit_ids):
+        for i, unit_id in enumerate(unit_ids):
             times = sorting.get_unit_spike_train(unit_id, segment_index=segment_index)
             times = times / sorting.get_sampling_frequency()
             spiketrains_segment[unit_id] = times
 
-        all_spiketrains = spiketrains_segment
-        all_amplitudes = amplitudes_segment
-        if max_spikes_per_unit is not None:
-            spiketrains_to_plot = dict()
-            amplitudes_to_plot = dict()
-            for unit, st in all_spiketrains.items():
-                amps = all_amplitudes[unit]
-                if len(st) > max_spikes_per_unit:
-                    random_idxs = np.random.choice(len(st), size=max_spikes_per_unit, replace=False)
-                    spiketrains_to_plot[unit] = st[random_idxs]
-                    amplitudes_to_plot[unit] = amps[random_idxs]
-                else:
-                    spiketrains_to_plot[unit] = st
-                    amplitudes_to_plot[unit] = amps
-        else:
-            spiketrains_to_plot = all_spiketrains
-            amplitudes_to_plot = all_amplitudes
+            if max_spikes_per_unit is not None:
+                spiketrains_to_plot = {}
+                amplitudes_to_plot = {}
+
+                for unit, st in spiketrains_segment.items():
+                    amps = amplitudes_segment[unit]
+                    if len(st) > max_spikes_per_unit:
+                        random_idxs = np.random.choice(len(st), size=max_spikes_per_unit, replace=False)
+                        spiketrains_to_plot[unit] = st[random_idxs]
+                        amplitudes_to_plot[unit] = amps[random_idxs]
+                    else:
+                        spiketrains_to_plot[unit] = st
+                        amplitudes_to_plot[unit] = amps
+            else:
+                spiketrains_to_plot = spiketrains_segment
+                amplitudes_to_plot = amplitudes_segment
 
         if plot_histograms and bins is None:
             bins = 100
