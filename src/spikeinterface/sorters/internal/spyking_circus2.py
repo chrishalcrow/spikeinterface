@@ -53,6 +53,7 @@ class Spykingcircus2Sorter(ComponentsBasedSorter):
         "clustering": {"legacy": True},
         "matching": {"method": "circus-omp-svd"},
         "apply_preprocessing": True,
+        "apply_whitening": True,
         "matched_filtering": True,
         "cache_preprocessing": {"mode": "memory", "memory_limit": 0.5, "delete_cache": True},
         "multi_units_only": False,
@@ -175,7 +176,10 @@ class Spykingcircus2Sorter(ComponentsBasedSorter):
         if whitening_kwargs["regularize"]:
             whitening_kwargs["regularize_kwargs"] = {"method": "LedoitWolf"}
 
-        recording_w = whiten(recording_f, **whitening_kwargs)
+        if params["apply_whitening"]:
+            recording_w = whiten(recording_f, **whitening_kwargs)
+        else:
+            recording_w = recording
         noise_levels = get_noise_levels(recording_w, return_scaled=False, **job_kwargs)
 
         if recording_w.check_serializability("json"):
@@ -183,7 +187,8 @@ class Spykingcircus2Sorter(ComponentsBasedSorter):
         elif recording_w.check_serializability("pickle"):
             recording_w.dump(sorter_output_folder / "preprocessed_recording.pickle", relative_to=None)
 
-        recording_w = cache_preprocessing(recording_w, **job_kwargs, **params["cache_preprocessing"])
+        if params["cache_preprocessing"] != {}:
+            recording_w = cache_preprocessing(recording_w, **job_kwargs, **params["cache_preprocessing"])
 
         ## Then, we are detecting peaks with a locally_exclusive method
         detection_params = params["detection"].copy()
