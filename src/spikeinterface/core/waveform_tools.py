@@ -485,7 +485,7 @@ def extract_waveforms_to_single_buffer(
         file_path = Path(file_path)
 
     num_spikes = spikes.size
-    if sparsity_mask is None:
+    if sparsity_mask is None or num_spikes == 0:
         num_chans = recording.get_num_channels()
     else:
         num_chans = int(max(np.sum(sparsity_mask, axis=1)))  # This is a numpy scalar, so we cast to int
@@ -825,13 +825,19 @@ def estimate_templates_with_accumulator(
         The average templates with shape (num_units, nbefore + nafter, num_channels)
     """
 
-    assert spikes.size > 0, "estimate_templates() need non empty sorting"
+    #    assert spikes.size > 0, "estimate_templates() need non empty sorting"
 
     job_kwargs = fix_job_kwargs(job_kwargs)
     num_worker = job_kwargs["n_jobs"]
 
     num_chans = recording.get_num_channels()
     num_units = len(unit_ids)
+
+    if num_units == 0:
+        if return_std:
+            return np.array([]), np.array([])
+        else:
+            return np.array([])
 
     shape = (num_worker, num_units, nbefore + nafter, num_chans)
     dtype = np.dtype("float32")

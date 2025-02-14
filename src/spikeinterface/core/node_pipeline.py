@@ -758,7 +758,7 @@ class GatherToMemory:
                 return outs_concat
         else:
             # list of numpy array
-            return np.concatenate(self.outputs)
+            return np.concatenate(self.outputs) if self.outputs else np.array([])
 
 
 class GatherToNpy:

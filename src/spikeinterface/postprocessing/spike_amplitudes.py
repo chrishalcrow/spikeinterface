@@ -181,7 +181,8 @@ class SpikeAmplitudeNode(PipelineNode):
         ), "SpikeAmplitudeNode needs a single SpikeRetriever as a parent"
         # put peak_shifts in vector way
         self._peak_shifts = np.array(list(peak_shifts.values()), dtype="int64")
-        self._margin = np.max(np.abs(self._peak_shifts))
+
+        self._margin = np.max(np.abs(self._peak_shifts)) if self._peak_shifts.shape[0] != 0 else np.array([])
         self._kwargs.update(
             peak_shifts=peak_shifts,
             return_scaled=return_scaled,

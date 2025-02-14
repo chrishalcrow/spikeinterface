@@ -219,7 +219,9 @@ def random_spikes_selection(
             )
             random_spikes_indices.append(selected_unit_indices)
 
-        random_spikes_indices = np.concatenate(random_spikes_indices)
+        random_spikes_indices = (
+            np.concatenate(random_spikes_indices) if random_spikes_indices else np.array([], dtype=int)
+        )
         random_spikes_indices = np.sort(random_spikes_indices)
 
     elif method == "all":

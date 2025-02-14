@@ -1029,8 +1029,11 @@ def compute_drift_metrics(
     """
     res = namedtuple("drift_metrics", ["drift_ptp", "drift_std", "drift_mad"])
     sorting = sorting_analyzer.sorting
-    if unit_ids is None:
+
+    if unit_ids is None or len(unit_ids) == 0:
         unit_ids = sorting.unit_ids
+        if not unit_ids:
+            return res([], [], [])
 
     if sorting_analyzer.has_extension("spike_locations"):
         spike_locations_ext = sorting_analyzer.get_extension("spike_locations")

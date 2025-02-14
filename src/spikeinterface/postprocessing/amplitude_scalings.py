@@ -208,25 +208,31 @@ class ComputeAmplitudeScalings(AnalyzerExtension):
         return nodes
 
     def _run(self, verbose=False, **job_kwargs):
-        job_kwargs = fix_job_kwargs(job_kwargs)
-        nodes = self.get_pipeline_nodes()
-        amp_scalings, collision_mask = run_node_pipeline(
-            self.sorting_analyzer.recording,
-            nodes,
-            job_kwargs=job_kwargs,
-            job_name="amplitude_scalings",
-            gather_mode="memory",
-            verbose=verbose,
-        )
-        self.data["amplitude_scalings"] = amp_scalings
-        if self.params["handle_collisions"]:
-            self.data["collision_mask"] = collision_mask
-            # TODO: make collisions "global"
-            # for collision in collisions:
-            #     collisions_dict.update(collision)
-            # self.collisions = collisions_dict
-            # # Note: collisions are note in _extension_data because they are not pickable. We only store the indices
-            # self._extension_data["collisions"] = np.array(list(collisions_dict.keys()))
+
+        if self.sorting_analyzer.get_num_units() == 0:
+            self.data["amplitude_scalings"] = np.array([])
+
+        else:
+
+            job_kwargs = fix_job_kwargs(job_kwargs)
+            nodes = self.get_pipeline_nodes()
+            amp_scalings, collision_mask = run_node_pipeline(
+                self.sorting_analyzer.recording,
+                nodes,
+                job_kwargs=job_kwargs,
+                job_name="amplitude_scalings",
+                gather_mode="memory",
+                verbose=verbose,
+            )
+            self.data["amplitude_scalings"] = amp_scalings
+            if self.params["handle_collisions"]:
+                self.data["collision_mask"] = collision_mask
+                # TODO: make collisions "global"
+                # for collision in collisions:
+                #     collisions_dict.update(collision)
+                # self.collisions = collisions_dict
+                # # Note: collisions are note in _extension_data because they are not pickable. We only store the indices
+                # self._extension_data["collisions"] = np.array(list(collisions_dict.keys()))
 
     def _get_data(self):
         return self.data[f"amplitude_scalings"]
