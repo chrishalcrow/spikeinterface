@@ -1,6 +1,19 @@
 from __future__ import annotations
 
 import numpy as np
+from spikeinterface.core import BaseRecording
+
+
+def apply_pp_to_rec_or_dict(recording_or_dict_of_recordings, preprocessing_step):
+
+    if isinstance(recording_or_dict_of_recordings, BaseRecording):
+        return preprocessing_step(recording_or_dict_of_recordings)
+    elif isinstance(recording_or_dict_of_recordings, dict):
+        recording_dict = {}
+        for property, recording in recording_or_dict_of_recordings.items():
+            assert isinstance(recording, BaseRecording)
+            recording_dict[property] = preprocessing_step(recording)
+        return recording_dict
 
 
 def get_spatial_interpolation_kernel(
