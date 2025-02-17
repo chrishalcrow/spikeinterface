@@ -308,6 +308,44 @@ class ComputePrincipalComponents(AnalyzerExtension):
         new_projections = self._transform_waveforms(new_spikes, new_waveforms, pca_model, progress_bar=progress_bar)
         return new_projections
 
+    def _run_fast(self, verbose=False, **job_kwargs):
+
+        from sklearn.decomposition import IncrementalPCA
+
+        p = self.params
+        mode = "by_channel_local"
+
+        if mode == "by_channel_local":
+
+            waveforms_ext = self.sorting_analyzer.get_extension("waveforms")
+            some_waveforms = waveforms_ext.data["waveforms"]
+            some_spikes = self.sorting_analyzer.get_extension("random_spikes").get_random_spikes()
+
+            shape = (some_waveforms.shape[0], p["n_components"], some_waveforms.shape[2])
+            pca_projection = np.zeros(shape, dtype="float32")
+
+            channel_ids = self.sorting_analyzer.channel_ids
+            pca_models = [IncrementalPCA(n_components=p["n_components"], whiten=p["whiten"]) for _ in channel_ids]
+
+            for unit_id in self.sorting_analyzer.unit_ids:
+
+                wfs, channel_inds, _ = self._get_slice_waveforms(unit_id, some_spikes, some_waveforms)
+                for wf_ind, _ in enumerate(channel_inds):
+
+                    pca = pca_models[wf_ind]
+                    pca.partial_fit(wfs[:, :, wf_ind])
+
+            for unit_id in self.sorting_analyzer.unit_ids:
+
+                wfs, channel_inds, spike_mask = self._get_slice_waveforms(unit_id, some_spikes, some_waveforms)
+                for wf_ind, _ in enumerate(channel_inds):
+
+                    pca = pca_models[wf_ind]
+                    proj = pca.transform(wfs[:, :, wf_ind])
+                    pca_projection[:, :, wf_ind][spike_mask, :] = proj
+
+        self.data["pca_projection"] = pca_projection
+
     def _run(self, verbose=False, **job_kwargs):
         """
         Compute the PCs on waveforms extacted within the by ComputeWaveforms.
@@ -420,7 +458,7 @@ class ComputePrincipalComponents(AnalyzerExtension):
         processor.run()
 
     def _fit_by_channel_local(self, n_jobs, progress_bar, max_threads_per_worker, mp_context):
-        from sklearn.decomposition import IncrementalPCA
+        from sklearn.decomposition import IncrementalPCA, PCA
 
         p = self.params
 
@@ -447,6 +485,7 @@ class ComputePrincipalComponents(AnalyzerExtension):
                 for wf_ind, chan_ind in enumerate(channel_inds):
                     pca = pca_models[chan_ind]
                     pca.partial_fit(wfs[:, :, wf_ind])
+                #    pca.fit(wfs[:, :, wf_ind])
             else:
                 # create list of args to parallelize. For convenience, the max_threads_per_worker is passed
                 # as last argument
