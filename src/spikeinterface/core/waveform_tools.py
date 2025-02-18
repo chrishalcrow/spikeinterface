@@ -825,8 +825,6 @@ def estimate_templates_with_accumulator(
         The average templates with shape (num_units, nbefore + nafter, num_channels)
     """
 
-    #    assert spikes.size > 0, "estimate_templates() need non empty sorting"
-
     job_kwargs = fix_job_kwargs(job_kwargs)
     num_worker = job_kwargs["n_jobs"]
 
@@ -838,6 +836,8 @@ def estimate_templates_with_accumulator(
             return np.array([]), np.array([])
         else:
             return np.array([])
+
+    assert spikes.size > 0, "estimate_templates() need non empty sorting"
 
     shape = (num_worker, num_units, nbefore + nafter, num_chans)
     dtype = np.dtype("float32")
