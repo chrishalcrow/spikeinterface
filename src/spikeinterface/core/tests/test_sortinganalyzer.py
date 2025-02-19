@@ -508,6 +508,41 @@ def test_extensions_sorting():
     assert list(sorted_extensions_4.keys()) == list(extensions_qm_correct.keys())
 
 
+def test_zero_unit_analyzer(tmp_path, dataset):
+    recording, sorting = dataset
+    sorting = sorting.select_units(unit_ids=[0])
+    sorting_analyzer = create_sorting_analyzer(sorting=sorting, recording=recording)
+    zero_sa = sorting_analyzer.remove_units(remove_unit_ids=[0])
+
+    available_extensions = get_available_analyzer_extensions()
+
+    for available_extension in available_extensions:
+        zero_sa.compute(available_extension)
+
+    extension_data = {}
+    for available_extension in available_extensions:
+        extension_data[available_extension] = zero_sa.get_extension(available_extension).get_data()
+
+    folder = tmp_path / "zero_unit_analyzer"
+
+    zero_sa.save_as(format="binary_folder", folder=folder)
+    zero_sa.save_as(format="zarr", folder=folder)
+
+    loaded_sa = load_sorting_analyzer(folder)
+
+    for available_extension in available_extensions:
+        zero_sa.delete_extension(available_extension)
+
+    loaded_extension_data = {}
+    loaded_sa = load_sorting_analyzer(folder)
+
+    for available_extension in available_extensions:
+        loaded_extension_data[available_extension] = loaded_sa.get_extension(available_extension).get_data()
+
+    for extension in extension_data:
+        assert len(extension_data[extension]) == len(loaded_extension_data[extension])
+
+
 if __name__ == "__main__":
     tmp_path = Path("test_SortingAnalyzer")
     dataset = get_dataset()

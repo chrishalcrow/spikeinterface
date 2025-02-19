@@ -1032,7 +1032,7 @@ def compute_drift_metrics(
 
     if unit_ids is None or len(unit_ids) == 0:
         unit_ids = sorting.unit_ids
-        if not unit_ids:
+        if unit_ids.size == 0:
             return res([], [], [])
 
     if sorting_analyzer.has_extension("spike_locations"):

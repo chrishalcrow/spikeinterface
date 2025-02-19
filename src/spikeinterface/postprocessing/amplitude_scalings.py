@@ -210,12 +210,12 @@ class ComputeAmplitudeScalings(AnalyzerExtension):
     def _run(self, verbose=False, **job_kwargs):
 
         job_kwargs = fix_job_kwargs(job_kwargs)
-        nodes = self.get_pipeline_nodes()
 
         if self.sorting_analyzer.get_num_units() == 0:
             amp_scalings = np.array([])
             collision_mask = np.array([])
         else:
+            nodes = self.get_pipeline_nodes()
             amp_scalings, collision_mask = run_node_pipeline(
                 self.sorting_analyzer.recording,
                 nodes,
