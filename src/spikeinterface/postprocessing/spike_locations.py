@@ -134,14 +134,17 @@ class ComputeSpikeLocations(AnalyzerExtension):
     def _run(self, verbose=False, **job_kwargs):
         job_kwargs = fix_job_kwargs(job_kwargs)
         nodes = self.get_pipeline_nodes()
-        spike_locations = run_node_pipeline(
-            self.sorting_analyzer.recording,
-            nodes,
-            job_kwargs=job_kwargs,
-            job_name="spike_locations",
-            gather_mode="memory",
-            verbose=verbose,
-        )
+        if self.sorting_analyzer.get_num_units() == 0:
+            spike_locations = np.array([])
+        else:
+            spike_locations = run_node_pipeline(
+                self.sorting_analyzer.recording,
+                nodes,
+                job_kwargs=job_kwargs,
+                job_name="spike_locations",
+                gather_mode="memory",
+                verbose=verbose,
+            )
         self.data["spike_locations"] = spike_locations
 
     def _get_data(self, outputs="numpy"):

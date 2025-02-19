@@ -120,16 +120,21 @@ class ComputeSpikeAmplitudes(AnalyzerExtension):
         return nodes
 
     def _run(self, verbose=False, **job_kwargs):
+
         job_kwargs = fix_job_kwargs(job_kwargs)
         nodes = self.get_pipeline_nodes()
-        amps = run_node_pipeline(
-            self.sorting_analyzer.recording,
-            nodes,
-            job_kwargs=job_kwargs,
-            job_name="spike_amplitudes",
-            gather_mode="memory",
-            verbose=False,
-        )
+
+        if self.sorting_analyzer.get_num_units() == 0:
+            amps = np.array([])
+        else:
+            amps = run_node_pipeline(
+                self.sorting_analyzer.recording,
+                nodes,
+                job_kwargs=job_kwargs,
+                job_name="spike_amplitudes",
+                gather_mode="memory",
+                verbose=False,
+            )
         self.data["amplitudes"] = amps
 
     def _get_data(self, outputs="numpy"):
