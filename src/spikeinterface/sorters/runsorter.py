@@ -12,6 +12,7 @@ import platform
 from warnings import warn
 from pathlib import Path
 from typing import Optional, Union
+import numpy as np
 
 import spikeinterface
 from spikeinterface import __version__ as si_version
@@ -67,7 +68,7 @@ SORTER_DOCKER_MAP = {k: f"{REGISTRY}/{v}-base" for k, v in SORTER_DOCKER_MAP.ite
 
 def run_sorter(
     sorter_name: str,
-    recording: BaseRecording,
+    recording: BaseRecording | dict,
     folder: Optional[str] = None,
     remove_existing_folder: bool = False,
     delete_output_folder: bool = False,
@@ -86,7 +87,10 @@ def run_sorter(
     """
     Function to run a sorter on a `recording` or dict of `recordings`
 
-    {}
+    Parameters
+    ----------
+    recording : BaseRecording or dict
+        The `BaseRecording` object to be sorted, or a dict of `BaseRecording` objects to be sorted.
     {}
     {}
     {}
@@ -106,7 +110,6 @@ def run_sorter(
 
     common_kwargs = dict(
         sorter_name=sorter_name,
-        recording=recording,
         folder=folder,
         remove_existing_folder=remove_existing_folder,
         delete_output_folder=delete_output_folder,
@@ -115,11 +118,12 @@ def run_sorter(
         with_output=with_output,
         docker_image=docker_image,
         singularity_image=singularity_image,
-        delete_container_files=delete_container_files**sorter_params,
+        delete_container_files=delete_container_files,
+        **sorter_params,
     )
 
     if isinstance(recording, BaseRecording):
-        return run_one_sorter(recording, **common_kwargs)
+        return run_one_sorter(recording=recording, **common_kwargs)
     elif isinstance(recording, dict):
         return _run_dict_of_sortings(
             dict_of_recordings=recording, engine=engine, engine_kwargs=engine_kwargs, **common_kwargs
@@ -163,23 +167,9 @@ def _run_dict_of_sortings(
 
     working_folder = Path(folder).absolute()
 
-    split_by_property = dict_of_recordings.values[0].get_annotation("split_by_property")
-    if split_by_property is not None:
-        grouping_property = grouping_property
-    else:
-        grouping_property = "group"
-
-    info_file = folder / f"spikeinterface_info.json"
-    info = dict(
-        version=spikeinterface.__version__,
-        dev_mode=spikeinterface.DEV_MODE,
-        object="Group",
-        group_of="BaseSorting",
-        grouping_property=grouping_property,
-        keys=list(dict_of_recordings.keys()),
-    )
-    with open(info_file, mode="w") as f:
-        json.dump(check_json(info), f, indent=4)
+    split_by_property = list(dict_of_recordings.values())[0].get_annotation("split_by_property")
+    if split_by_property is None:
+        split_by_property = "group"
 
     job_list = []
     for k, rec in dict_of_recordings.items():
@@ -199,7 +189,21 @@ def _run_dict_of_sortings(
         job_list.append(job)
 
     sorting_list = run_sorter_jobs(job_list, engine=engine, engine_kwargs=engine_kwargs, return_output=with_output)
-    return sorting_list
+    sorting_dict = dict(zip(dict_of_recordings.keys(), sorting_list))
+
+    info_file = working_folder / f"spikeinterface_info.json"
+    info = dict(
+        version=spikeinterface.__version__,
+        dev_mode=spikeinterface.DEV_MODE,
+        object="Group",
+        group_of="BaseSorting",
+        grouping_property=split_by_property,
+        keys=list(dict_of_recordings.keys()),
+    )
+    with open(info_file, mode="w") as f:
+        json.dump(check_json(info), f, indent=4)
+
+    return sorting_dict
 
 
 def run_one_sorter(
@@ -830,7 +834,7 @@ def run_sorter_jobs(job_list, engine="loop", engine_kwargs={}, return_output=Fal
     if engine == "loop":
         # simple loop in main process
         for kwargs in job_list:
-            sorting = run_sorter(**kwargs)
+            sorting = run_one_sorter(**kwargs)
             if return_output:
                 out.append(sorting)
 
@@ -839,7 +843,7 @@ def run_sorter_jobs(job_list, engine="loop", engine_kwargs={}, return_output=Fal
 
         n_jobs = engine_kwargs["n_jobs"]
         backend = engine_kwargs["backend"]
-        sortings = Parallel(n_jobs=n_jobs, backend=backend)(delayed(run_sorter)(**kwargs) for kwargs in job_list)
+        sortings = Parallel(n_jobs=n_jobs, backend=backend)(delayed(run_one_sorter)(**kwargs) for kwargs in job_list)
         if return_output:
             out.extend(sortings)
 
@@ -852,7 +856,7 @@ def run_sorter_jobs(job_list, engine="loop", engine_kwargs={}, return_output=Fal
         with ProcessPoolExecutor(max_workers=max_workers, mp_context=mp_context) as executor:
             futures = []
             for kwargs in job_list:
-                res = executor.submit(run_sorter, **kwargs)
+                res = executor.submit(run_one_sorter, **kwargs)
                 futures.append(res)
             for futur in futures:
                 sorting = futur.result()
@@ -865,7 +869,7 @@ def run_sorter_jobs(job_list, engine="loop", engine_kwargs={}, return_output=Fal
 
         tasks = []
         for kwargs in job_list:
-            task = client.submit(run_sorter, **kwargs)
+            task = client.submit(run_one_sorter, **kwargs)
             tasks.append(task)
 
         for task in tasks:
