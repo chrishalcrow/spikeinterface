@@ -3,26 +3,20 @@ from __future__ import annotations
 import stat
 import subprocess
 import sys
-
-from .sorterlist import sorter_dict
-from spikeinterface.core import aggregate_units
-
 import shutil
 import os
-from pathlib import Path
 import json
 import pickle
 import platform
+
 from warnings import warn
+from pathlib import Path
 from typing import Optional, Union
 
-from spikeinterface import DEV_MODE
 import spikeinterface
-
 from spikeinterface import __version__ as si_version
-
-
-from spikeinterface.core import BaseRecording, NumpySorting, load
+from spikeinterface import DEV_MODE
+from spikeinterface.core import BaseRecording, NumpySorting, load, aggregate_units
 from spikeinterface.core.core_tools import check_json, is_editable_mode
 from .sorterlist import sorter_dict
 from .utils import (
@@ -298,7 +292,7 @@ def run_one_sorter(
 def run_sorter_local(
     sorter_name,
     recording,
-    folder,
+    folder=None,
     remove_existing_folder=True,
     delete_output_folder=False,
     verbose=False,
@@ -317,7 +311,7 @@ def run_sorter_local(
     {}
     """
     if isinstance(recording, list):
-        raise Exception("If you want to run several sorters/recordings use run_sorter_jobs(...)")
+        raise Exception("If you want to sort several recordings, pass a dict of recordings to to `run_sorter`")
 
     if output_folder is not None and folder is None:
         deprecation_msg = (
@@ -359,7 +353,6 @@ def run_sorter_container(
     sorter_name: str,
     recording: BaseRecording,
     mode: str,
-    # todo 0.103: make folder non-optional
     folder: Optional[str] = None,
     container_image: Optional[str] = None,
     remove_existing_folder: bool = True,
