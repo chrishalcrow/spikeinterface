@@ -12,6 +12,7 @@ from typing import Optional, Union
 from spikeinterface import DEV_MODE
 import spikeinterface
 
+from .launcher import run_sorter_jobs
 
 from spikeinterface import __version__ as si_version
 
@@ -121,16 +122,14 @@ def run_sorter(
     delete_container_files: bool = True,
     with_output: bool = True,
     output_folder: None = None,
+    engine="loop",
+    engine_kwargs={},
     **sorter_params,
 ):
     """
-    Generic function to run a sorter via function approach.
+    Function to run a sorter on a `recording` or dict of `recordings`
 
-    {}
-
-    Examples
-    --------
-    >>> sorting = run_sorter("tridesclous", recording)
+    BLAH BLAH
     """
 
     if output_folder is not None and folder is None:
@@ -142,6 +141,112 @@ def run_sorter(
 
     if folder is None:
         folder = sorter_name + "_output"
+
+    common_kwargs = dict(
+        sorter_name=sorter_name,
+        recording=recording,
+        folder=folder,
+        remove_existing_folder=remove_existing_folder,
+        delete_output_folder=delete_output_folder,
+        verbose=verbose,
+        raise_error=raise_error,
+        with_output=with_output,
+        docker_image=docker_image,
+        singularity_image=singularity_image,
+        delete_container_files=delete_container_files**sorter_params,
+    )
+
+    if isinstance(recording, BaseRecording):
+        return run_one_sorter(recording, **common_kwargs)
+    elif isinstance(recording, dict):
+        return _run_dict_of_sortings(
+            dict_of_recordings=recording, engine=engine, engine_kwargs=engine_kwargs, **common_kwargs
+        )
+    else:
+        raise TypeError("The `run_sorter` recording argument only accepts recording or a dict of recordings.")
+
+
+def _run_dict_of_sortings(
+    sorter_name: str,
+    dict_of_recordings: dict,
+    engine="loop",
+    engine_kwargs={},
+    folder: Optional[str] = None,
+    remove_existing_folder: bool = False,
+    delete_output_folder: bool = False,
+    verbose: bool = False,
+    raise_error: bool = True,
+    docker_image: Optional[Union[bool, str]] = False,
+    singularity_image: Optional[Union[bool, str]] = False,
+    delete_container_files: bool = True,
+    with_output: bool = True,
+    **sorter_params,
+):
+
+    working_folder = Path(folder).absolute()
+
+    split_by_property = dict_of_recordings.values[0].get_annotation("split_by_property")
+    if split_by_property is not None:
+        grouping_property = grouping_property
+    else:
+        grouping_property = "group"
+
+    info_file = folder / f"spikeinterface_info.json"
+    info = dict(
+        version=spikeinterface.__version__,
+        dev_mode=spikeinterface.DEV_MODE,
+        object="Group",
+        group_of="BaseSorting",
+        grouping_property=grouping_property,
+        keys=list(dict_of_recordings.keys()),
+    )
+    with open(info_file, mode="w") as f:
+        json.dump(check_json(info), f, indent=4)
+
+    job_list = []
+    for k, rec in dict_of_recordings.items():
+        job = dict(
+            sorter_name=sorter_name,
+            recording=rec,
+            folder=working_folder / str(k),
+            verbose=verbose,
+            docker_image=docker_image,
+            singularity_image=singularity_image,
+            delete_container_files=delete_container_files,
+            raise_error=raise_error,
+            delete_output_folder=delete_output_folder,
+            remove_existing_folder=remove_existing_folder,
+            **sorter_params,
+        )
+        job_list.append(job)
+
+    sorting_list = run_sorter_jobs(job_list, engine=engine, engine_kwargs=engine_kwargs, return_output=with_output)
+    return sorting_list
+
+
+def run_one_sorter(
+    sorter_name: str,
+    recording: BaseRecording,
+    folder: Optional[str] = None,
+    remove_existing_folder: bool = False,
+    delete_output_folder: bool = False,
+    verbose: bool = False,
+    raise_error: bool = True,
+    docker_image: Optional[Union[bool, str]] = False,
+    singularity_image: Optional[Union[bool, str]] = False,
+    delete_container_files: bool = True,
+    with_output: bool = True,
+    **sorter_params,
+):
+    """
+    Function to run one sorter, either locally or using Docker or Singularity.
+
+    {}
+
+    Examples
+    --------
+    >>> sorting = run_sorter("tridesclous", recording)
+    """
 
     common_kwargs = dict(
         sorter_name=sorter_name,
