@@ -4,11 +4,7 @@ import stat
 import subprocess
 import sys
 
-from spikeinterface.core import aggregate_units
-
 from .sorterlist import sorter_dict
-from .runsorter import run_sorter
-from .basesorter import is_log_ok
 
 
 import shutil
@@ -22,8 +18,6 @@ from typing import Optional, Union
 
 from spikeinterface import DEV_MODE
 import spikeinterface
-
-from .launcher import run_sorter_jobs
 
 from spikeinterface import __version__ as si_version
 
@@ -48,7 +42,6 @@ from .container_tools import (
     ContainerClient,
     install_package_in_container,
 )
-
 
 REGISTRY = "spikeinterface"
 
@@ -78,48 +71,6 @@ SORTER_DOCKER_MAP = dict(
 SORTER_DOCKER_MAP = {k: f"{REGISTRY}/{v}-base" for k, v in SORTER_DOCKER_MAP.items()}
 
 
-_common_param_doc = """
-    Parameters
-    ----------
-    sorter_name : str
-        The sorter name
-    recording : RecordingExtractor
-        The recording extractor to be spike sorted
-    folder : str or Path
-        Path to output folder
-    remove_existing_folder : bool
-        If True and folder exists then delete.
-    delete_output_folder : bool, default: False
-        If True, output folder is deleted
-    verbose : bool, default: False
-        If True, output is verbose
-    raise_error : bool, default: True
-        If True, an error is raised if spike sorting fails
-        If False, the process continues and the error is logged in the log file.
-    docker_image : bool or str, default: False
-        If True, pull the default docker container for the sorter and run the sorter in that container using docker.
-        Use a str to specify a non-default container. If that container is not local it will be pulled from docker hub.
-        If False, the sorter is run locally
-    singularity_image : bool or str, default: False
-        If True, pull the default docker container for the sorter and run the sorter in that container using
-        singularity. Use a str to specify a non-default container. If that container is not local it will be pulled
-        from Docker Hub. If False, the sorter is run locally
-    with_output : bool, default: True
-        If True, the output Sorting is returned as a Sorting
-    delete_container_files : bool, default: True
-        If True, the container temporary files are deleted after the sorting is done
-    output_folder : None, default: None
-        Do not use. Deprecated output function to be removed in 0.103.
-    **sorter_params : keyword args
-        Spike sorter specific arguments (they can be retrieved with `get_default_sorter_params(sorter_name_or_class)`)
-
-    Returns
-    -------
-    BaseSorting | None
-        The spike sorted data (it `with_output` is True) or None (if `with_output` is False)
-    """
-
-
 def run_sorter(
     sorter_name: str,
     recording: BaseRecording,
@@ -137,10 +88,16 @@ def run_sorter(
     engine_kwargs={},
     **sorter_params,
 ):
+    # Docstrings generated in `Doc and docstring` section below
     """
     Function to run a sorter on a `recording` or dict of `recordings`
 
-    BLAH BLAH
+    {}
+    {}
+    {}
+    {}
+
+    {}
     """
 
     if output_folder is not None and folder is None:
@@ -193,6 +150,22 @@ def _run_dict_of_sortings(
     with_output: bool = True,
     **sorter_params,
 ):
+    # Docstrings generated in `Doc and docstring` section below
+    """
+
+    Parameters
+    ----------
+    dict_of_recording : dict
+        A dictionary of `RecordingExtractors`, grouped by their key.
+    {}
+    {}
+    {}
+
+    Returns
+    -------
+    dict | None
+        Dict of sorting objects `BaseSorter`s (if `with_output` is True) or None (if `with_output` is False)
+    """
 
     working_folder = Path(folder).absolute()
 
@@ -249,8 +222,12 @@ def run_one_sorter(
     with_output: bool = True,
     **sorter_params,
 ):
+    # Docstrings generated in `Doc and docstring` section below
     """
     Function to run one sorter, either locally or using Docker or Singularity.
+
+    {}
+    {}
 
     {}
 
@@ -318,9 +295,6 @@ def run_one_sorter(
     return run_sorter_local(**common_kwargs)
 
 
-run_sorter.__doc__ = run_sorter.__doc__.format(_common_param_doc)
-
-
 def run_sorter_local(
     sorter_name,
     recording,
@@ -333,31 +307,14 @@ def run_sorter_local(
     output_folder=None,
     **sorter_params,
 ):
+    # Docstrings generated in `Doc and docstring` section below
     """
     Runs a sorter locally.
 
-    Parameters
-    ----------
-    sorter_name : str
-        The sorter name
-    recording : RecordingExtractor
-        The recording extractor to be spike sorted
-    folder : str or Path
-        Path to output folder. If None, a folder is created in the current directory
-    remove_existing_folder : bool, default: True
-        If True and output_folder exists yet then delete
-    delete_output_folder : bool, default: False
-        If True, output folder is deleted
-    verbose : bool, default: False
-        If True, output is verbose
-    raise_error : bool, default: True
-        If True, an error is raised if spike sorting fails.
-        If False, the process continues and the error is logged in the log file
-    with_output : bool, default: True
-        If True, the output Sorting is returned as a Sorting
-    output_folder : None, default: None
-        Do not use. Deprecated output function to be removed in 0.103.
-    **sorter_params : keyword args
+    {}
+    {}
+
+    {}
     """
     if isinstance(recording, list):
         raise Exception("If you want to run several sorters/recordings use run_sorter_jobs(...)")
@@ -418,32 +375,13 @@ def run_sorter_container(
     output_folder: None = None,
     **sorter_params,
 ):
+    # Docstrings generated in `Doc and docstring` section below
     """
+    Runs a sorter in a container.
 
-    Parameters
-    ----------
-    sorter_name : str
-        The sorter name
-    recording : BaseRecording
-        The recording extractor to be spike sorted
-    mode : str
-        The container mode : "docker" or "singularity"
-    folder : str, default: None
-        Path to output folder
-    container_image : str, default: None
-        The container image name and tag. If None, the default container image is used
-    remove_existing_folder : bool, default: True
-        If True and output_folder exists yet then delete
-    delete_output_folder : bool, default: False
-        If True, output folder is deleted
-    verbose : bool, default: False
-        If True, output is verbose
-    raise_error : bool, default: True
-        If True, an error is raised if spike sorting fails
-    with_output : bool, default: True
-        If True, the output Sorting is returned as a Sorting
-    delete_container_files : bool, default: True
-        If True, the container temporary files are deleted after the sorting is done
+    {}
+    {}
+    {}
     extra_requirements : list, default: None
         List of extra requirements to install in the container
     installation_mode : "auto" | "pypi" | "github" | "folder" | "dev" | "no-install", default: "auto"
@@ -461,8 +399,8 @@ def run_sorter_container(
         The spikeinterface version to install in the container. If None, the current version is used
     spikeinterface_folder_source : Path or None, default: None
         In case of installation_mode="folder", the spikeinterface folder source to use to install in the container
-    **sorter_params : keyword args for the sorter
 
+    {}
     """
 
     assert installation_mode in ("auto", "pypi", "github", "folder", "dev", "no-install")
@@ -836,6 +774,7 @@ _implemented_engine = list(_default_engine_kwargs.keys())
 
 
 def run_sorter_jobs(job_list, engine="loop", engine_kwargs={}, return_output=False):
+    # Docstrings generated in `Doc and docstring` section below
     """
     Run several :py:func:`run_sorter()` sequentially or in parallel given a list of jobs.
 
@@ -866,19 +805,12 @@ def run_sorter_jobs(job_list, engine="loop", engine_kwargs={}, return_output=Fal
     ----------
     job_list : list of dict
         A list a dict that are propagated to run_sorter(...)
-    engine : str "loop", "joblib", "dask", "slurm"
-        The engine to run the list.
-        * "loop" : a simple loop. This engine is
-    engine_kwargs : dict
-
+    {}
     return_output : bool, dfault False
         Return a sortings or None.
         This also overwrite kwargs in  in run_sorter(with_sorting=True/False)
 
-    Returns
-    -------
-    sortings : None or list of sorting
-        With engine="loop" or "joblib" you can optional get directly the list of sorting result if return_output=True.
+    {}
     """
 
     assert engine in _implemented_engine, f"engine must be in {_implemented_engine}"
@@ -1002,3 +934,69 @@ kwargs['recording'] = load(rec_dict)
 
 run_sorter(**kwargs)
 """
+
+#########################################
+# Doc and docstring section
+#########################################
+
+
+_recording_param_doc = """Parameters
+    ----------
+    recording : RecordingExtractor
+        The recording extractor to be spike sorted"""
+
+_common_param_doc = """sorter_name : str
+        The sorter name
+    folder : str or Path
+        Path to output folder
+    remove_existing_folder : bool
+        If True and folder exists then delete.
+    delete_output_folder : bool, default: False
+        If True, output folder is deleted
+    verbose : bool, default: False
+        If True, output is verbose
+    raise_error : bool, default: True
+        If True, an error is raised if spike sorting fails
+        If False, the process continues and the error is logged in the log file.
+    with_output : bool, default: True
+        If True, the output Sorting is returned as a Sorting
+    **sorter_params : keyword args
+        Spike sorter specific arguments (they can be retrieved with `get_default_sorter_params(sorter_name_or_class)`)"""
+
+_container_param_doc = """docker_image : bool or str, default: False
+        If True, pull the default docker container for the sorter and run the sorter in that container using docker.
+        Use a str to specify a non-default container. If that container is not local it will be pulled from docker hub.
+        If False, the sorter is run locally
+    singularity_image : bool or str, default: False
+        If True, pull the default docker container for the sorter and run the sorter in that container using
+        singularity. Use a str to specify a non-default container. If that container is not local it will be pulled
+        from Docker Hub. If False, the sorter is run locally
+    delete_container_files : bool, default: True
+        If True, the container temporary files are deleted after the sorting is done"""
+
+_engine_param_doc = """engine : str "loop", "joblib", "dask", "slurm"
+        The engine to run the list.
+        * "loop" : a simple loop. This engine is
+    engine_kwargs : dict"""
+
+_output_doc = """Returns
+    -------
+    BaseSorting | None
+        The spike sorted data (if `with_output` is True) or None (if `with_output` is False)"""
+
+
+run_sorter.__doc__ = run_sorter.__doc__.format(
+    _recording_param_doc, _common_param_doc, _container_param_doc, _engine_param_doc, _output_doc
+)
+_run_dict_of_sortings.__doc__ = _run_dict_of_sortings.__doc__.format(
+    _common_param_doc, _container_param_doc, _engine_param_doc
+)
+
+run_one_sorter.__doc__ = run_one_sorter.__doc__.format(
+    _recording_param_doc, _common_param_doc, _container_param_doc, _output_doc
+)
+run_sorter_local.__doc__ = run_sorter_local.__doc__.format(_recording_param_doc, _common_param_doc, _output_doc)
+run_sorter_container.__doc__ = run_sorter_container.__doc__.format(
+    _recording_param_doc, _common_param_doc, _container_param_doc, _output_doc
+)
+run_sorter_jobs.__doc__ = run_sorter_jobs.__doc__.format(_engine_param_doc, _output_doc)
