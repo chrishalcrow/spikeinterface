@@ -5,7 +5,7 @@ import subprocess
 import sys
 
 from .sorterlist import sorter_dict
-
+from spikeinterface.core import aggregate_units
 
 import shutil
 import os
@@ -935,6 +935,95 @@ kwargs['recording'] = load(rec_dict)
 run_sorter(**kwargs)
 """
 
+
+def run_sorter_by_property(
+    sorter_name,
+    recording,
+    grouping_property,
+    folder,
+    engine="loop",
+    engine_kwargs={},
+    verbose=False,
+    docker_image=None,
+    singularity_image=None,
+    working_folder: None = None,
+    **sorter_params,
+):
+    """
+    Generic function to run a sorter on a recording after splitting by a "grouping_property" (e.g. "group").
+
+    Internally, the function works as follows:
+        * the recording is split based on the provided "grouping_property" (using the "split_by" function)
+        * the "run_sorters" function is run on the split recordings
+        * sorting outputs are aggregated using the "aggregate_units" function
+        * the "grouping_property" is added as a property to the SortingExtractor
+
+    {}
+    {}
+    {}
+
+    {}
+
+    Examples
+    --------
+    This example shows how to run spike sorting split by group using the "joblib" backend with 4 jobs for parallel
+    processing.
+
+    >>> sorting = si.run_sorter_by_property("tridesclous", recording, grouping_property="group",
+                                            folder="sort_by_group", engine="joblib",
+                                            engine_kwargs={"n_jobs": 4})
+
+    """
+
+    warn(
+        "`run_sorter_by_propertt` is deprecated and will be removed in 0.105. Please use `run_sorter` instead.",
+        category=DeprecationWarning,
+        stacklevel=2,
+    )
+
+    if working_folder is not None:
+        warn(
+            "`working_folder` is deprecated and will be removed in 0.103. Please use folder instead",
+            category=DeprecationWarning,
+            stacklevel=2,
+        )
+        folder = working_folder
+
+    working_folder = Path(folder).absolute()
+
+    assert grouping_property in recording.get_property_keys(), (
+        f"The 'grouping_property' {grouping_property} is not " f"a recording property!"
+    )
+    recording_dict = recording.split_by(grouping_property)
+
+    job_list = []
+    for k, rec in recording_dict.items():
+        job = dict(
+            sorter_name=sorter_name,
+            recording=rec,
+            folder=working_folder / str(k),
+            verbose=verbose,
+            docker_image=docker_image,
+            singularity_image=singularity_image,
+            **sorter_params,
+        )
+        job_list.append(job)
+
+    sorting_list = run_sorter_jobs(job_list, engine=engine, engine_kwargs=engine_kwargs, return_output=True)
+
+    unit_groups = []
+    for sorting, group in zip(sorting_list, recording_dict.keys()):
+        num_units = sorting.get_unit_ids().size
+        unit_groups.extend([group] * num_units)
+    unit_groups = np.array(unit_groups)
+
+    aggregate_sorting = aggregate_units(sorting_list)
+    aggregate_sorting.set_property(key=grouping_property, values=unit_groups)
+    aggregate_sorting.register_recording(recording)
+
+    return aggregate_sorting
+
+
 #########################################
 # Doc and docstring section
 #########################################
@@ -1000,3 +1089,7 @@ run_sorter_container.__doc__ = run_sorter_container.__doc__.format(
     _recording_param_doc, _common_param_doc, _container_param_doc, _output_doc
 )
 run_sorter_jobs.__doc__ = run_sorter_jobs.__doc__.format(_engine_param_doc, _output_doc)
+
+run_sorter_by_property.__doc__ = run_sorter_by_property.__doc__.format(
+    _recording_param_doc, _common_param_doc, _container_param_doc, _engine_param_doc, _output_doc
+)
