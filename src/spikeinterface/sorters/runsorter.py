@@ -140,6 +140,9 @@ def run_sorter(
         folder = output_folder
         warn(deprecation_msg, category=DeprecationWarning, stacklevel=2)
 
+    if folder is None:
+        folder = sorter_name + "_output"
+
     common_kwargs = dict(
         sorter_name=sorter_name,
         recording=recording,
@@ -205,7 +208,7 @@ run_sorter.__doc__ = run_sorter.__doc__.format(_common_param_doc)
 def run_sorter_local(
     sorter_name,
     recording,
-    folder=None,
+    folder,
     remove_existing_folder=True,
     delete_output_folder=False,
     verbose=False,
@@ -283,8 +286,9 @@ def run_sorter_container(
     sorter_name: str,
     recording: BaseRecording,
     mode: str,
-    container_image: Optional[str] = None,
+    # todo 0.103: make folder non-optional
     folder: Optional[str] = None,
+    container_image: Optional[str] = None,
     remove_existing_folder: bool = True,
     delete_output_folder: bool = False,
     verbose: bool = False,
@@ -308,10 +312,10 @@ def run_sorter_container(
         The recording extractor to be spike sorted
     mode : str
         The container mode : "docker" or "singularity"
+    folder : str, default: None
+        Path to output folder
     container_image : str, default: None
         The container image name and tag. If None, the default container image is used
-    output_folder : str, default: None
-        Path to output folder
     remove_existing_folder : bool, default: True
         If True and output_folder exists yet then delete
     delete_output_folder : bool, default: False
@@ -353,14 +357,14 @@ def run_sorter_container(
         )
         folder = output_folder
         warn(deprecation_msg, category=DeprecationWarning, stacklevel=2)
+    assert folder is not None, "Must provide a `folder`"
+
     spikeinterface_version = spikeinterface_version or si_version
 
     if extra_requirements is None:
         extra_requirements = []
 
     # common code for docker and singularity
-    if folder is None:
-        folder = sorter_name + "_output"
 
     if container_image is None:
         if sorter_name in SORTER_DOCKER_MAP:

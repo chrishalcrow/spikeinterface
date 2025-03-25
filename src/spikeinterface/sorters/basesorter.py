@@ -117,8 +117,7 @@ class BaseSorter:
                     "(.prb or .csv) or by setting them manually."
                 )
 
-        if output_folder is None:
-            output_folder = cls.sorter_name + "_output"
+        assert output_folder is not None, "Must provide an `output_folder`"
 
         # Resolve path
         output_folder = Path(output_folder).absolute()
