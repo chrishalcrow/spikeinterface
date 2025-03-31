@@ -966,10 +966,6 @@ def run_sorter_by_property(
     This example shows how to run spike sorting split by group using the "joblib" backend with 4 jobs for parallel
     processing.
 
-    >>> sorting = si.run_sorter_by_property("tridesclous", recording, grouping_property="group",
-                                            folder="sort_by_group", engine="joblib",
-                                            engine_kwargs={"n_jobs": 4})
-
     """
 
     warn(
