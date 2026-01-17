@@ -2,7 +2,6 @@ from __future__ import annotations
 from pathlib import Path
 import shutil
 from typing import Any, Iterable, List, Optional, Sequence, Union
-import importlib
 import warnings
 import weakref
 import json
