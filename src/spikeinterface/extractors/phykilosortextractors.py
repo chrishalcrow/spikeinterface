@@ -17,6 +17,7 @@ from spikeinterface.core import (
     SortingAnalyzer,
 )
 from spikeinterface.core.core_tools import define_function_from_class
+from spikeinterface.core.template_tools import get_template_extremum_amplitude
 
 from spikeinterface.postprocessing import ComputeSpikeAmplitudes, ComputeSpikeLocations
 from probeinterface import read_prb, Probe
@@ -376,13 +377,57 @@ def read_kilosort_as_analyzer(folder_path, unwhiten=True) -> SortingAnalyzer:
 
     _make_templates(sorting_analyzer, phy_path, sparsity.mask, sampling_frequency, unwhiten=unwhiten)
     _make_locations(sorting_analyzer, phy_path)
+    _make_amplitudes(sorting_analyzer, phy_path)
 
     sorting_analyzer._recording = None
     return sorting_analyzer
 
 
+def _make_amplitudes(sorting_analyzer, kilosort_output_path):
+    """Constructs approximate `spike_amplitudes` extension from the amplitudes numpy array
+    in `kilosort_output_path`, and attaches the extension to the `sorting_analyzer`."""
+
+    amplitudes_extension = ComputeSpikeAmplitudes(sorting_analyzer)
+
+    spike_amplitudes_path = kilosort_output_path / "amplitudes.npy"
+    if spike_amplitudes_path.is_file():
+        amps_np = np.load(spike_amplitudes_path)
+        if amps_np.ndim == 2:
+            amps_np = np.transpose(amps_np)[0]
+    else:
+        return
+
+    # Check that the spike amplitudes vector is the same size as the spike vector
+    num_spikes = len(sorting_analyzer.sorting.to_spike_vector())
+    num_spike_amps = len(amps_np)
+    if num_spikes != num_spike_amps:
+        warnings.warn(
+            "The number of spikes does not match the number of spike amplitudes in `amplitudes.npy`. Skipping spike amplitudes."
+        )
+        return
+
+    # rescale the amplitudes to the scale of the templates
+    peak_to_peak_amps = get_template_extremum_amplitude(sorting_analyzer, peak_sign="both", mode="extremum")
+    spike_indices = sorting_analyzer.sorting.get_spike_vector_to_indices()
+    scaling_factors = np.zeros(num_spikes)
+    for unit_id in sorting_analyzer.unit_ids:
+        # kilosort always has one segment, so always choose 0 segment index
+        inds = spike_indices[0][unit_id]
+        amps_in_unit = amps_np[inds]
+        median_amp_in_unit = np.median(amps_in_unit)
+        scaling_factors[inds] = peak_to_peak_amps[unit_id] / median_amp_in_unit
+
+    scaled_amps = amps_np * scaling_factors
+
+    amplitudes_extension.data = {"amplitudes": scaled_amps}
+    amplitudes_extension.params = {}
+    amplitudes_extension.run_info = {"run_completed": True}
+
+    sorting_analyzer.extensions["spike_amplitudes"] = amplitudes_extension
+
+
 def _make_locations(sorting_analyzer, kilosort_output_path):
-    """Constructs a `spike_locations` extension from the amplitudes numpy array
+    """Constructs a `spike_locations` extension from the locations numpy array
     in `kilosort_output_path`, and attaches the extension to the `sorting_analyzer`."""
 
     locations_extension = ComputeSpikeLocations(sorting_analyzer)
