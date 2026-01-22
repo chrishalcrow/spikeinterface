@@ -1,4 +1,5 @@
 from __future__ import annotations
+from pandas.tests.tseries.offsets.test_business_day import offset
 
 from typing import Optional
 from pathlib import Path
@@ -318,7 +319,7 @@ read_phy = define_function_from_class(source_class=PhySortingExtractor, name="re
 read_kilosort = define_function_from_class(source_class=KiloSortSortingExtractor, name="read_kilosort")
 
 
-def read_kilosort_as_analyzer(folder_path, unwhiten=True) -> SortingAnalyzer:
+def read_kilosort_as_analyzer(folder_path, unwhiten=True, gain_to_uV=None, offset_to_uV=None) -> SortingAnalyzer:
     """
     Load Kilosort output into a SortingAnalyzer. Output from Kilosort version 4.1 and
     above are supported. The function may work on older versions of Kilosort output,
@@ -330,12 +331,27 @@ def read_kilosort_as_analyzer(folder_path, unwhiten=True) -> SortingAnalyzer:
         Path to the output Phy folder (containing the params.py).
     unwhiten : bool, default: True
         Unwhiten the templates computed by kilosort.
+    gain_to_uV : float | None, default: None
+        The gain to apply to convert traces to uV
+    offset_to_uV : float | None, default: None
+        The offset to apply to the traces
 
     Returns
     -------
     sorting_analyzer : SortingAnalyzer
         A SortingAnalyzer object.
     """
+
+    if gain_to_uV is None:
+        warnings.warn(
+            f"No `gain_to_uv` value given. Outputted data will be in dimensionless units. If you know the conversion factor, please pass it to the `read_kilosort_as_analyzer` function."
+        )
+        gain_to_uV = 1.0
+    if offset_to_uV is None:
+        warnings.warn(
+            f"No `offset_to_uV` value given. Outputted data may not be offset correctly. If you know the offset factor, please pass it to the `read_kilosort_as_analyzer` function."
+        )
+        offset_to_uV = 1.0
 
     phy_path = Path(folder_path)
 
@@ -375,15 +391,17 @@ def read_kilosort_as_analyzer(folder_path, unwhiten=True) -> SortingAnalyzer:
     # first compute random spikes. These do nothing, but are needed for si-gui to run
     sorting_analyzer.compute("random_spikes")
 
-    _make_templates(sorting_analyzer, phy_path, sparsity.mask, sampling_frequency, unwhiten=unwhiten)
+    _make_templates(
+        sorting_analyzer, phy_path, sparsity.mask, sampling_frequency, gain_to_uV, offset_to_uV, unwhiten=unwhiten
+    )
     _make_locations(sorting_analyzer, phy_path)
-    _make_amplitudes(sorting_analyzer, phy_path)
+    _make_amplitudes(sorting_analyzer, phy_path, gain_to_uV, offset_to_uV)
 
     sorting_analyzer._recording = None
     return sorting_analyzer
 
 
-def _make_amplitudes(sorting_analyzer, kilosort_output_path):
+def _make_amplitudes(sorting_analyzer, kilosort_output_path, gain_to_uV, offset_to_uV):
     """Constructs approximate `spike_amplitudes` extension from the amplitudes numpy array
     in `kilosort_output_path`, and attaches the extension to the `sorting_analyzer`."""
 
@@ -406,18 +424,33 @@ def _make_amplitudes(sorting_analyzer, kilosort_output_path):
         )
         return
 
-    # rescale the amplitudes to the scale of the templates
-    peak_to_peak_amps = get_template_extremum_amplitude(sorting_analyzer, peak_sign="both", mode="extremum")
+    # rescale the amplitudes to physical units, by computing a conversion factor per unit
+    # based on the ratio between the `absmax`s the unwhitened and whitened templates
+    whitened_templates = np.load(kilosort_output_path / "templates.npy")
+    wh_inv = np.load(kilosort_output_path / "whitening_mat_inv.npy")
+    unwhitened_templates = _compute_unwhitened_templates(
+        whitened_templates=whitened_templates, wh_inv=wh_inv, gain_to_uV=gain_to_uV, offset_to_uV=offset_to_uV
+    )
+
     spike_indices = sorting_analyzer.sorting.get_spike_vector_to_indices()
     scaling_factors = np.zeros(num_spikes)
-    for unit_id in sorting_analyzer.unit_ids:
+    for unit_ind, unit_id in enumerate(sorting_analyzer.unit_ids):
+
+        whitened_template = whitened_templates[unit_ind, :, :]
+        whitened_extremum = np.nanmax(np.abs(whitened_template))
+
+        unwhitened_template = unwhitened_templates[unit_ind, :, :]
+        unwhitened_extremum_absargmax = np.argmax(np.abs(unwhitened_template), keepdims=True)
+        # note: we don't `abs` the extrema so that the amps have the expected sign
+        unwhitened_extremum = unwhitened_template[unwhitened_extremum_absargmax]
+
+        conversion_factor = unwhitened_extremum / whitened_extremum
+
         # kilosort always has one segment, so always choose 0 segment index
         inds = spike_indices[0][unit_id]
-        amps_in_unit = amps_np[inds]
-        median_amp_in_unit = np.median(amps_in_unit)
-        scaling_factors[inds] = peak_to_peak_amps[unit_id] / median_amp_in_unit
+        scaling_factors[inds] = conversion_factor
 
-    scaled_amps = amps_np * scaling_factors
+    scaled_amps = amps_np * scaling_factors * gain_to_uV + offset_to_uV
 
     amplitudes_extension.data = {"amplitudes": scaled_amps}
     amplitudes_extension.params = {}
@@ -477,7 +510,9 @@ def _make_sparsity_from_templates(sorting, recording, kilosort_output_path):
     return ChannelSparsity(mask, unit_ids=unit_ids, channel_ids=channel_ids)
 
 
-def _make_templates(sorting_analyzer, kilosort_output_path, mask, sampling_frequency, unwhiten=True):
+def _make_templates(
+    sorting_analyzer, kilosort_output_path, mask, sampling_frequency, gain_to_uV, offset_to_uV, unwhiten=True
+):
     """Constructs a `templates` extension from the amplitudes numpy array
     in `kilosort_output_path`, and attaches the extension to the `sorting_analyzer`."""
 
@@ -485,7 +520,11 @@ def _make_templates(sorting_analyzer, kilosort_output_path, mask, sampling_frequ
 
     whitened_templates = np.load(kilosort_output_path / "templates.npy")
     wh_inv = np.load(kilosort_output_path / "whitening_mat_inv.npy")
-    new_templates = _compute_unwhitened_templates(whitened_templates, wh_inv) if unwhiten else whitened_templates
+    new_templates = (
+        _compute_unwhitened_templates(whitened_templates, wh_inv, gain_to_uV, offset_to_uV)
+        if unwhiten
+        else whitened_templates
+    )
 
     template_extension.data = {"average": new_templates}
 
@@ -493,6 +532,7 @@ def _make_templates(sorting_analyzer, kilosort_output_path, mask, sampling_frequ
     if ops_path.is_file():
         ops = np.load(ops_path, allow_pickle=True)
 
+        print(f"{ops=}")
         number_samples_before_template_peak = ops.item(0)["nt0min"]
         total_template_samples = ops.item(0)["nt"]
 
@@ -524,7 +564,7 @@ def _make_templates(sorting_analyzer, kilosort_output_path, mask, sampling_frequ
     sorting_analyzer.extensions["templates"] = template_extension
 
 
-def _compute_unwhitened_templates(whitened_templates, wh_inv):
+def _compute_unwhitened_templates(whitened_templates, wh_inv, gain_to_uV, offset_to_uV):
     """Constructs unwhitened templates from whitened_templates, by
     applying an inverse whitening matrix."""
 
@@ -533,4 +573,5 @@ def _compute_unwhitened_templates(whitened_templates, wh_inv):
     # to undo whitening, we need do matrix multiplication on the channel index
     unwhitened_templates = np.einsum("ij,klj->kli", wh_inv, whitened_templates)
 
-    return unwhitened_templates
+    # then scale to physical units
+    return unwhitened_templates * gain_to_uV + offset_to_uV
