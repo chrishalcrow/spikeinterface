@@ -430,7 +430,9 @@ def _make_amplitudes(sorting_analyzer, kilosort_output_path, gain_to_uV, offset_
         ops = np.load(ops_path, allow_pickle=True)
         wPCA = ops.tolist()["wPCA"]
 
+    # wh_inv = np.load(kilosort_output_path / "whitening_mat_inv.npy")
     neg_amps = np.min(np.min(np.einsum("ji,ajk->aik", wPCA, pcs), axis=2), axis=1)
+    # neg_amps = np.min(np.min(np.einsum("bc,ji,ajk->aik", wh_inv, wPCA, pcs), axis=2), axis=1)
 
     # rescale the amplitudes to physical units, by computing a conversion factor per unit
     # based on the ratio between the `absmax`s the unwhitened and whitened templates
@@ -440,27 +442,29 @@ def _make_amplitudes(sorting_analyzer, kilosort_output_path, gain_to_uV, offset_
         whitened_templates=whitened_templates, wh_inv=wh_inv, gain_to_uV=gain_to_uV, offset_to_uV=offset_to_uV
     )
 
-    spike_indices = sorting_analyzer.sorting.get_spike_vector_to_indices()
-    scaling_factors = np.zeros(num_spikes)
-    #  for unit_ind, unit_id in enumerate(sorting_analyzer.unit_ids):
+    if True:
+        spike_indices = sorting_analyzer.sorting.get_spike_vector_to_indices()
+        scaling_factors = np.zeros(num_spikes)
+        for unit_ind, unit_id in enumerate(sorting_analyzer.unit_ids):
 
-    # whitened_template = whitened_templates[unit_ind, :, :]
-    #  whitened_extremum = np.nanmax(np.abs(whitened_template))
+            whitened_template = whitened_templates[unit_ind, :, :]
+            whitened_extremum = np.nanmax(np.abs(whitened_template))
 
-    #   unwhitened_template = unwhitened_templates[unit_ind, :, :]
-    #    unwhitened_extremum_absargmax = np.argmax(np.abs(unwhitened_template), keepdims=True)
-    # note: we don't `abs` the extrema so that the amps have the expected sign
-    #     unwhitened_extremum = unwhitened_template[unwhitened_extremum_absargmax]
+            unwhitened_template = unwhitened_templates[unit_ind, :, :]
+            # unwhitened_extremum_absargmax = np.argmax(np.abs(unwhitened_template), keepdims=True)
+            # note: we don't `abs` the extrema so that the amps have the expected sign
+            # unwhitened_extremum = unwhitened_template[np.unravel_index(unwhitened_extremum_absargmax, unwhitened_template.shape)]
+            unwhitened_extremum = np.nanmax(np.abs(unwhitened_template))
 
-    #      conversion_factor = unwhitened_extremum / whitened_extremum
+            conversion_factor = unwhitened_extremum / whitened_extremum
 
-    # kilosort always has one segment, so always choose 0 segment index
-    #       inds = spike_indices[0][unit_id]
-    #        scaling_factors[inds] = conversion_factor
+            # kilosort always has one segment, so always choose 0 segment index
+            inds = spike_indices[0][unit_id]
+            scaling_factors[inds] = conversion_factor
 
-    # scaled_amps = amps_np * scaling_factors * gain_to_uV + offset_to_uV
+    scaled_amps = neg_amps * scaling_factors
 
-    amplitudes_extension.data = {"amplitudes": neg_amps}
+    amplitudes_extension.data = {"amplitudes": scaled_amps}
     amplitudes_extension.params = {}
     amplitudes_extension.run_info = {"run_completed": True}
 
