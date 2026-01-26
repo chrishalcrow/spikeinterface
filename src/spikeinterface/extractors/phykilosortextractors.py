@@ -384,7 +384,8 @@ def read_kilosort_as_analyzer(folder_path, unwhiten=True, gain_to_uV=None, offse
         seed=1205,
     )
 
-    sparsity = _make_sparsity_from_templates(sorting, recording, phy_path)
+    # sparsity = _make_sparsity_from_templates(sorting, recording, phy_path)
+    sparsity = _make_sparsity_from_pcs(recording, sorting, phy_path)
 
     sorting_analyzer = create_sorting_analyzer(sorting, recording, sparse=True, sparsity=sparsity)
 
@@ -430,51 +431,63 @@ def _make_amplitudes(sorting_analyzer, kilosort_output_path, gain_to_uV, offset_
         ops = np.load(ops_path, allow_pickle=True)
         wPCA = ops.tolist()["wPCA"]
 
-    # wh_inv = np.load(kilosort_output_path / "whitening_mat_inv.npy")
+    pc_inds = np.load(kilosort_output_path / "pc_feature_ind.npy")
 
     wh_inv = np.load(kilosort_output_path / "whitening_mat_inv.npy")
 
-    whitened_waveforms = _get_unwhitened_waveforms(wPCA, pcs, sorting_analyzer, wh_inv)
+    whitened_waveforms = _get_whitened_waveforms(wPCA, pcs, sorting_analyzer, wh_inv)
+    print(f"{whitened_waveforms.shape}")
 
     spike_vector = sorting_analyzer.sorting.to_spike_vector()
     unit_indices = spike_vector["unit_index"]
 
-    print(f"{len(whitened_waveforms)=}")
-    print(f"{len(unit_indices)=}")
+    whitened_templates = np.load(kilosort_output_path / "templates.npy")
+    # rescale the amplitudes to physical units, by computing a conversion factor per unit
+    # based on the ratio between the `absmax`s the unwhitened and whitened templates
+    unwhitened_templates = _compute_unwhitened_templates(
+        whitened_templates=whitened_templates, wh_inv=wh_inv, gain_to_uV=1.0, offset_to_uV=0.0
+    )
 
-    templates = sorting_analyzer.get_extension("templates").get_data()
-    sparse_templates = sorting_analyzer.sparsity.sparsify_templates(templates)
+    # print(f"{len(whitened_waveforms)=}")
+    # print(f"{len(unit_indices)=}")
 
+    # templates = sorting_analyzer.get_extension("templates").get_data()
+    # print(f"{templates.shape=}")
+    # sparse_templates = sorting_analyzer.sparsity.sparsify_templates(templates)
+
+    wht_inv_per_unit = [
+        wh_inv[pc_inds[unit_index], :][:, pc_inds[unit_index]] for unit_index, _ in enumerate(sorting_analyzer.unit_ids)
+    ]
     scaling_factor = np.zeros(len(unit_indices))
     for spike_index, (unit_index, waveform) in enumerate(zip(unit_indices, whitened_waveforms)):
-        template = sparse_templates[unit_index, :, :10]
-        scaling_factor[spike_index] = np.einsum("ij,ij", waveform, template) / np.einsum("ij,ij", template, template)
+        unwhitened_template = unwhitened_templates[unit_index, :, pc_inds[unit_index]]
+        # whitened_template = whitened_templates[unit_index, :, pc_inds[unit_index]]
+        unwhitened_waveform = np.einsum("ij,kj->ki", wht_inv_per_unit[unit_index], waveform)
+        scaling_factor[spike_index] = np.einsum("ij,ji", unwhitened_waveform, unwhitened_template) / np.einsum(
+            "ij,ij", unwhitened_template, unwhitened_template
+        )
 
     neg_amps = np.max(np.max(np.abs(whitened_waveforms), axis=2), axis=1)
     # neg_amps = np.min(np.min(np.einsum("bc,ji,ajk->aik", wh_inv, wPCA, pcs), axis=2), axis=1)
-
-    # rescale the amplitudes to physical units, by computing a conversion factor per unit
-    # based on the ratio between the `absmax`s the unwhitened and whitened templates
-    whitened_templates = np.load(kilosort_output_path / "templates.npy")
-    unwhitened_templates = _compute_unwhitened_templates(
-        whitened_templates=whitened_templates, wh_inv=wh_inv, gain_to_uV=gain_to_uV, offset_to_uV=offset_to_uV
-    )
 
     if True:
         spike_indices = sorting_analyzer.sorting.get_spike_vector_to_indices()
         scaling_factors = np.zeros(num_spikes)
         for unit_ind, unit_id in enumerate(sorting_analyzer.unit_ids):
 
-            whitened_template = whitened_templates[unit_ind, :, :]
-            whitened_extremum = np.nanmax(np.abs(whitened_template))
+            whitened_template = whitened_templates[unit_ind, :, pc_inds[unit_ind]]
+            whitened_extremum = np.nanmax(whitened_template) - np.nanmin(whitened_template)
 
-            unwhitened_template = unwhitened_templates[unit_ind, :, :]
+            unwhitened_template = unwhitened_templates[unit_ind, :, pc_inds[unit_ind]]
             # unwhitened_extremum_absargmax = np.argmax(np.abs(unwhitened_template), keepdims=True)
             # note: we don't `abs` the extrema so that the amps have the expected sign
             # unwhitened_extremum = unwhitened_template[np.unravel_index(unwhitened_extremum_absargmax, unwhitened_template.shape)]
-            unwhitened_extremum = np.nanmax(np.abs(unwhitened_template))
+            unwhitened_extremum = np.nanmax(unwhitened_template) - np.nanmin(unwhitened_template)
 
-            conversion_factor = unwhitened_extremum / whitened_extremum
+            # print(f"{whitened_extremum=}, {unwhitened_extremum=}")
+
+            conversion_factor = unwhitened_extremum  # / whitened_extremum
+            # print(f"unit {unit_id} conversion factor: {conversion_factor}")
 
             # kilosort always has one segment, so always choose 0 segment index
             inds = spike_indices[0][unit_id]
@@ -483,16 +496,14 @@ def _make_amplitudes(sorting_analyzer, kilosort_output_path, gain_to_uV, offset_
         scaled_amps = scaling_factor * scaling_factors
         print("hey")
 
-    amplitudes_extension.data = {"amplitudes": scaled_amps}
+    amplitudes_extension.data = {"amplitudes": scaling_factor * scaling_factors * gain_to_uV}
     amplitudes_extension.params = {}
     amplitudes_extension.run_info = {"run_completed": True}
 
     sorting_analyzer.extensions["spike_amplitudes"] = amplitudes_extension
-    template_extension = sorting_analyzer.get_extension("templates")
-    template_extension.data = {"average": unwhitened_templates}
 
 
-def _get_unwhitened_waveforms(wPCA, pcs, sorting_analyzer, wh_inv):
+def _get_whitened_waveforms(wPCA, pcs, sorting_analyzer, wh_inv):
 
     # sparsity_mask = sorting_analyzer.sparsity.mask
 
@@ -557,6 +568,22 @@ def _make_sparsity_from_templates(sorting, recording, kilosort_output_path):
     return ChannelSparsity(mask, unit_ids=unit_ids, channel_ids=channel_ids)
 
 
+def _make_sparsity_from_pcs(recording, sorting, kilosort_output_path):
+    """Constructs the `ChannelSparsity` of from kilosort output, by seeing if the
+    templates output is zero or not on all channels."""
+
+    pc_inds = np.load(kilosort_output_path / "pc_feature_ind.npy")
+    unit_ids_to_channel_ids = {
+        unit_id: recording.channel_ids[pc_inds[unit_index]] for unit_index, unit_id in enumerate(sorting.unit_ids)
+    }
+    sparsity = ChannelSparsity.from_unit_id_to_channel_ids(
+        unit_ids_to_channel_ids, sorting.unit_ids, recording.channel_ids
+    )
+
+    # return ChannelSparsity(mask, unit_ids=unit_ids, channel_ids=channel_ids)
+    return sparsity
+
+
 def _make_templates(
     sorting_analyzer, kilosort_output_path, mask, sampling_frequency, gain_to_uV, offset_to_uV, unwhiten=True
 ):
@@ -615,7 +642,7 @@ def _compute_unwhitened_templates(whitened_templates, wh_inv, gain_to_uV, offset
     applying an inverse whitening matrix."""
 
     # templates have dimension (num units) x (num samples) x (num channels)
-    # whitening inverse has dimension (num units) x (num channels)
+    # whitening inverse has dimension (num channels) x (num channels)
     # to undo whitening, we need do matrix multiplication on the channel index
 
     unwhitened_templates = np.einsum("ij,klj->kli", wh_inv, whitened_templates)
