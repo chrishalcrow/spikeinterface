@@ -1,4 +1,7 @@
 from __future__ import annotations
+from spikeinterface.postprocessing.principal_component import ComputePrincipalComponents
+from spikeinterface.preprocessing.scale import scale_to_uV
+from spikeinterface.core.analyzer_extension_core import ComputeWaveforms
 from pandas.tests.tseries.offsets.test_business_day import offset
 
 from typing import Optional
@@ -390,16 +393,75 @@ def read_kilosort_as_analyzer(folder_path, unwhiten=True, gain_to_uV=None, offse
     sorting_analyzer = create_sorting_analyzer(sorting, recording, sparse=True, sparsity=sparsity)
 
     # first compute random spikes. These do nothing, but are needed for si-gui to run
-    sorting_analyzer.compute("random_spikes")
+    sorting_analyzer.compute("random_spikes", method="all")
 
     _make_templates(
         sorting_analyzer, phy_path, sparsity.mask, sampling_frequency, gain_to_uV, offset_to_uV, unwhiten=unwhiten
     )
     _make_locations(sorting_analyzer, phy_path)
     _make_amplitudes(sorting_analyzer, phy_path, gain_to_uV, offset_to_uV)
+    _make_waveforms(sorting_analyzer, phy_path, gain_to_uV, offset_to_uV)
+    _make_principal_components(sorting_analyzer, phy_path)
 
     sorting_analyzer._recording = None
     return sorting_analyzer
+
+
+def _make_principal_components(sorting_analyzer, kilosort_output_path):
+
+    pcs_extension = ComputePrincipalComponents(sorting_analyzer)
+
+    pcs = np.load(Path(kilosort_output_path) / "pc_features.npy")
+
+    print(f"{pcs.shape=}")
+
+    pcs_extension.data = {"pca_projection": pcs}
+    pcs_extension.params = {"n_components": 6, "mode": "by_channel_local", "whiten": True, "dtype": "float32"}
+    pcs_extension.run_info = {"run_completed": True}
+
+    sorting_analyzer.extensions["principal_components"] = pcs_extension
+
+
+def _make_waveforms(sorting_analyzer, kilosort_output_path, gain_to_uV, offset_to_uV):
+
+    waveforms_extension = ComputeWaveforms(sorting_analyzer)
+
+    pcs = np.load(Path(kilosort_output_path) / "pc_features.npy")
+    ops_path = kilosort_output_path / "ops.npy"
+    if ops_path.is_file():
+        ops = np.load(ops_path, allow_pickle=True)
+        wPCA = ops.tolist()["wPCA"]
+    pc_inds = np.load(kilosort_output_path / "pc_feature_ind.npy")
+    wh_inv = np.load(kilosort_output_path / "whitening_mat_inv.npy")
+    whitened_waveforms = _get_whitened_waveforms(wPCA, pcs, sorting_analyzer, wh_inv)
+
+    spike_vector = sorting_analyzer.sorting.to_spike_vector()
+
+    wht_inv_per_unit = [
+        wh_inv[pc_inds[unit_index], :][:, pc_inds[unit_index]] for unit_index, _ in enumerate(sorting_analyzer.unit_ids)
+    ]
+
+    order_per_unit_index = {}
+    for unit_index, _ in enumerate(sorting_analyzer.unit_ids):
+        channel_order = sorting_analyzer.recording.ids_to_indices(
+            sorting_analyzer.channel_ids[sorting_analyzer.sparsity.mask[unit_index]]
+        )
+        order_per_unit_index[unit_index] = np.array(
+            [list(pc_inds[unit_index]).index(channel_ind) for channel_ind in channel_order]
+        )
+
+    correct_waveforms = np.empty_like(whitened_waveforms)
+    for waveform_index, (whitened_waveform, unit_index) in enumerate(
+        zip(whitened_waveforms, spike_vector["unit_index"])
+    ):
+        unwhitened_waveform = np.einsum("ij,kj->ki", wht_inv_per_unit[unit_index], whitened_waveform)
+        correct_waveforms[waveform_index, :, :] = unwhitened_waveform[:, order_per_unit_index[unit_index]]
+
+    waveforms_extension.data = {"waveforms": correct_waveforms * gain_to_uV + offset_to_uV}
+    waveforms_extension.params = {}
+    waveforms_extension.run_info = {"run_completed": True}
+
+    sorting_analyzer.extensions["waveforms"] = waveforms_extension
 
 
 def _make_amplitudes(sorting_analyzer, kilosort_output_path, gain_to_uV, offset_to_uV):
@@ -430,13 +492,9 @@ def _make_amplitudes(sorting_analyzer, kilosort_output_path, gain_to_uV, offset_
     if ops_path.is_file():
         ops = np.load(ops_path, allow_pickle=True)
         wPCA = ops.tolist()["wPCA"]
-
     pc_inds = np.load(kilosort_output_path / "pc_feature_ind.npy")
-
     wh_inv = np.load(kilosort_output_path / "whitening_mat_inv.npy")
-
     whitened_waveforms = _get_whitened_waveforms(wPCA, pcs, sorting_analyzer, wh_inv)
-    print(f"{whitened_waveforms.shape}")
 
     spike_vector = sorting_analyzer.sorting.to_spike_vector()
     unit_indices = spike_vector["unit_index"]
@@ -455,6 +513,14 @@ def _make_amplitudes(sorting_analyzer, kilosort_output_path, gain_to_uV, offset_
     # print(f"{templates.shape=}")
     # sparse_templates = sorting_analyzer.sparsity.sparsify_templates(templates)
 
+    order_per_unit_index = {}
+    for unit_index, _ in enumerate(sorting_analyzer.unit_ids):
+        channel_order = sorting_analyzer.recording.ids_to_indices(
+            sorting_analyzer.channel_ids[sorting_analyzer.sparsity.mask[unit_index]]
+        )
+        order_per_unit_index[unit_index] = np.array(
+            [list(pc_inds[unit_index]).index(channel_ind) for channel_ind in channel_order]
+        )
     wht_inv_per_unit = [
         wh_inv[pc_inds[unit_index], :][:, pc_inds[unit_index]] for unit_index, _ in enumerate(sorting_analyzer.unit_ids)
     ]
@@ -463,9 +529,11 @@ def _make_amplitudes(sorting_analyzer, kilosort_output_path, gain_to_uV, offset_
         unwhitened_template = unwhitened_templates[unit_index, :, pc_inds[unit_index]]
         # whitened_template = whitened_templates[unit_index, :, pc_inds[unit_index]]
         unwhitened_waveform = np.einsum("ij,kj->ki", wht_inv_per_unit[unit_index], waveform)
-        scaling_factor[spike_index] = np.einsum("ij,ji", unwhitened_waveform, unwhitened_template) / np.einsum(
-            "ij,ij", unwhitened_template, unwhitened_template
-        )
+        # correct_waveform = unwhitened_waveform[:,order_per_unit_index[unit_index]]
+        scaling_factor[spike_index] = np.min(unwhitened_waveform)
+        # scaling_factor[spike_index] = np.einsum("ij,ji", correct_waveform, unwhitened_template) / np.einsum(
+        #    "ij,ij", unwhitened_template, unwhitened_template
+        # )
 
     neg_amps = np.max(np.max(np.abs(whitened_waveforms), axis=2), axis=1)
     # neg_amps = np.min(np.min(np.einsum("bc,ji,ajk->aik", wh_inv, wPCA, pcs), axis=2), axis=1)
@@ -494,9 +562,8 @@ def _make_amplitudes(sorting_analyzer, kilosort_output_path, gain_to_uV, offset_
             scaling_factors[inds] = conversion_factor
 
         scaled_amps = scaling_factor * scaling_factors
-        print("hey")
 
-    amplitudes_extension.data = {"amplitudes": scaling_factor * scaling_factors * gain_to_uV}
+    amplitudes_extension.data = {"amplitudes": scaling_factor * gain_to_uV}  # * scaling_factors * gain_to_uV}
     amplitudes_extension.params = {}
     amplitudes_extension.run_info = {"run_completed": True}
 
