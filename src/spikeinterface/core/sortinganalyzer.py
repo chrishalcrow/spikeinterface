@@ -1943,6 +1943,9 @@ extension_params={"waveforms":{"ms_before":1.5, "ms_after": "2.5"}}\
 
         extension_class = get_extension_class(extension_name)
 
+        if extension_class is None:
+            return None
+
         extension_instance = extension_class.load(self)
 
         self.extensions[extension_name] = extension_instance
@@ -2198,7 +2201,10 @@ def get_extension_class(extension_name: str, auto_import=True):
                     f"Extension '{extension_name}' is not registered, please import related module before use: 'import {module}'"
                 )
         else:
-            raise ValueError(f"Extension '{extension_name}' is unknown maybe this is an external extension or a typo.")
+            warnings.warn(
+                f"Extension '{extension_name}' is unknown. Maybe this is an external extension, a typo or was computed by a different version of SpikeInterface."
+            )
+        return None
 
     ext_class = extensions_dict[extension_name]
     return ext_class
