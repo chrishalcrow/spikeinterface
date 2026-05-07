@@ -94,13 +94,13 @@ preprocessing = [
 postprocessing = [
     "spikeinterface[preprocessing]",
     "scipy",
-    "scikit-learn<1.8",
+    "scikit-learn",
     "numba>=0.59",
     "matplotlib>=3.6",
 ]
 
 metrics = [
-    "scikit-learn<1.8",
+    "scikit-learn",
     "scipy",
     "pandas<3",
     "numba>=0.59",
@@ -126,7 +126,7 @@ sorters = [
 sortingcomponents = [
     "spikeinterface[preprocessing]",
     "scipy",
-    "scikit-learn<1.8",
+    "scikit-learn",
     "numba>=0.59",
     "networkx",
     "hdbscan>=0.8.33",
@@ -145,7 +145,7 @@ curation = [
     "spikeinterface[postprocessing]",
     "spikeinterface[comparison]",
     "pandas<3",
-    "scikit-learn<1.8",
+    "scikit-learn",
     "skops",
     "huggingface_hub",
     "numba>=0.59",
@@ -222,7 +222,7 @@ docs = [
     "networkx",
     "seaborn",
     "skops", # For automated curation
-    "scikit-learn<1.8", # For automated curation
+    "scikit-learn", # For automated curation
     "huggingface_hub", # For automated curation
 
     # for release we need pypi, so this needs to be commented
