@@ -76,9 +76,17 @@ class Split(BaseModel):
         return full_spike_indices
 
 
+class DiscardSpikes(BaseModel):
+    unit_id: int | str = Field(description="ID of the unit")
+    indices: list[int] | None = Field(
+        default=None,
+        description=("List of indices of the spikes to discard."),
+    )
+
+
 class Curation(BaseModel):
-    supported_versions: tuple[Literal["1"], Literal["2"]] = Field(
-        default=("1", "2"), description="Supported versions of the curation format"
+    supported_versions: tuple[Literal["1"], Literal["2"], Literal["3"]] = Field(
+        default=("1", "2", "3"), description="Supported versions of the curation format"
     )
     format_version: str = Field(description="Version of the curation format")
     unit_ids: list[int | str] = Field(description="List of unit IDs")
@@ -89,6 +97,9 @@ class Curation(BaseModel):
     removed: list[int | str] | None = Field(default=None, description="List of removed unit IDs")
     merges: list[Merge] | None = Field(default=None, description="List of merges")
     splits: list[Split] | None = Field(default=None, description="List of splits")
+    discard_spikes: list[DiscardSpikes] | None = Field(
+        default=None, description="List of spikes to discard for each unit"
+    )
 
     @field_validator("label_definitions", mode="before")
     def add_label_definition_name(cls, label_definitions):
@@ -294,6 +305,39 @@ class Curation(BaseModel):
         return values
 
     @classmethod
+    def check_discard_spikes(cls, values):
+        """
+        Checks and validates the discard_spikes in the curation model.
+
+            * Checks if the unit_id exists in the unit_ids list.
+            * Checks that indices are defined and that there are no duplicate indices.
+
+        """
+        unit_ids = list(values["unit_ids"])
+        discard_spikes = values.get("discard_spikes")
+        if discard_spikes is None:
+            values["discard_spikes"] = []
+            return values
+
+        # Convert items to DiscardSpikes objects
+        discard_spikes_objects = [DiscardSpikes(**discard_spike) for discard_spike in discard_spikes]
+
+        # Validate discard spikes
+        for discard_spike in discard_spikes_objects:
+            # Check unit exists
+            if discard_spike.unit_id not in unit_ids:
+                raise ValueError(f"DiscardSpikes unit_id {discard_spike.unit_id} is not in the unit list")
+            if discard_spike.indices is None:
+                raise ValueError(f"DiscardSpikes unit {discard_spike.unit_id} has no indices defined")
+            # Check no duplicate indices
+            all_indices = discard_spike.indices
+            if len(all_indices) != len(set(all_indices)):
+                raise ValueError(f"DiscardSpikes unit {discard_spike.unit_id} has duplicate indices")
+
+        values["discard_spikes"] = discard_spikes_objects
+        return values
+
+    @classmethod
     def check_removed(cls, values):
         """
         Checks and validates the removed units in the curation model.
@@ -315,13 +359,14 @@ class Curation(BaseModel):
     @classmethod
     def convert_old_format(cls, values):
         """
-        Converts old curation formats (v0 and v1) to the current format (v2).
+        Converts old curation formats (v0, v1 and v2) to the current format (v3).
         v0 (sortingview) format is converted to v2 by extracting labels, merges, and unit IDs.
         v1 format is updated to v2 by renaming fields and ensuring the structure matches the v2 format.
+        v2 format is updated to v3 by updating the `format_version`.
         """
         format_version = values.get("format_version", "0")
         if format_version == "0":
-            print("Conversion from format version v0 (sortingview) to v2")
+            print("Conversion from format version v0 (sortingview) to v3")
             if "mergeGroups" not in values.keys():
                 values["mergeGroups"] = []
             merge_groups = values["mergeGroups"]
@@ -350,7 +395,7 @@ class Curation(BaseModel):
             all_units = list(set(all_units))
 
             values = {
-                "format_version": "2",
+                "format_version": "3",
                 "unit_ids": values.get("unit_ids", all_units),
                 "label_definitions": labels_def,
                 "manual_labels": list(manual_labels),
@@ -365,6 +410,11 @@ class Curation(BaseModel):
             removed_units = values.get("removed_units")
             if removed_units is not None:
                 values["removed"] = list(removed_units)
+            values["supported_versions"] = ("1", "2", "3")
+        elif values["format_version"] == "2":
+            values["format_version"] = "3"
+            values["supported_versions"] = ("1", "2", "3")
+
         return values
 
     def get_final_ids_from_new_unit_ids(self) -> list:
@@ -422,6 +472,7 @@ class Curation(BaseModel):
         values = cls.check_merges(values)
         values = cls.check_splits(values)
         values = cls.check_removed(values)
+        values = cls.check_discard_spikes(values)
         return values
 
     @model_validator(mode="after")
@@ -434,6 +485,9 @@ class Curation(BaseModel):
         labeled_unit_set = {lbl.unit_id for lbl in self.manual_labels} if self.manual_labels else set()
         merged_units_set = set(chain.from_iterable(merge.unit_ids for merge in self.merges)) if self.merges else set()
         split_units_set = {split.unit_id for split in self.splits} if self.splits else set()
+        discard_spikes_units_set = (
+            set(discard_spikes.unit_id for discard_spikes in self.discard_spikes) if self.discard_spikes else set()
+        )
         removed_set = set(self.removed) if self.removed else set()
         unit_ids = self.unit_ids
 
@@ -446,6 +500,8 @@ class Curation(BaseModel):
             raise ValueError("Curation format: some split units are not in the unit list")
         if not removed_set.issubset(unit_set):
             raise ValueError("Curation format: some removed units are not in the unit list")
+        if not discard_spikes_units_set.issubset(unit_set):
+            raise ValueError("Curation format: some discard_spikes units are not in the unit list")
 
         # Check for units being merged multiple times
         all_merging_groups = [set(merge.unit_ids) for merge in self.merges] if self.merges else []
