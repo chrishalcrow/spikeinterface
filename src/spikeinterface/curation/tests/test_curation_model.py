@@ -13,7 +13,7 @@ def test_format_version():
 
     # Invalid format version
     with pytest.raises(ValidationError):
-        Curation(format_version="3", unit_ids=[1, 2, 3])
+        Curation(format_version="4", unit_ids=[1, 2, 3])
     with pytest.raises(ValidationError):
         Curation(format_version="0.1", unit_ids=[1, 2, 3])
 
@@ -213,6 +213,34 @@ def test_split_units():
         Curation(**invalid_new_ids)
 
 
+# Test discard_spikes functionality
+def test_discard_spikes():
+    # Test indices mode with list format
+    valid_discard_spikes_indices = {
+        "format_version": "3",
+        "unit_ids": [1, 2, 3],
+        "discard_spikes": [
+            {
+                "unit_id": 1,
+                "indices": [0, 1, 2],
+            }
+        ],
+    }
+
+    model = Curation(**valid_discard_spikes_indices)
+    assert len(model.discard_spikes) == 1
+    assert len(model.discard_spikes[0].indices) == 3
+
+    # Test invalid unit ID
+    invalid_unit_id = {
+        "format_version": "3",
+        "unit_ids": [1, 2, 3],
+        "discard_spikes": [{"unit_id": 4, "indices": [0, 1]}],  # Non-existent unit
+    }
+    with pytest.raises(ValidationError):
+        Curation(**invalid_unit_id)
+
+
 # Test removed units
 def test_removed_units():
     valid_remove = {"format_version": "2", "unit_ids": [1, 2, 3], "removed": [2]}
@@ -239,7 +267,7 @@ def test_removed_units():
 # Test complete model with multiple operations
 def test_complete_model():
     complete_model = {
-        "format_version": "2",
+        "format_version": "3",
         "unit_ids": [1, 2, 3, 4, 5],
         "label_definitions": {
             "quality": LabelDefinition(name="quality", label_options=["good", "noise"], exclusive=True),
@@ -252,7 +280,7 @@ def test_complete_model():
     }
 
     model = Curation(**complete_model)
-    assert model.format_version == "2"
+    assert model.format_version == "3"
     assert len(model.unit_ids) == 5
     assert len(model.label_definitions) == 2
     assert len(model.manual_labels) == 1
