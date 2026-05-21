@@ -648,6 +648,7 @@ def apply_splits_to_sorting(
     sorting: BaseSorting,
     unit_splits: dict[int | str, list[list[int | str]]],
     new_unit_ids: list[list[int | str]] | None = None,
+    discard_spikes_unit_ids=None,
     return_extra: bool = False,
     new_id_strategy: str = "append",
 ):
@@ -696,7 +697,11 @@ def apply_splits_to_sorting(
     # this is true when running via apply_curation
 
     new_unit_ids = generate_unit_ids_for_split(
-        sorting.unit_ids, unit_splits, new_unit_ids=new_unit_ids, new_id_strategy=new_id_strategy
+        sorting.unit_ids,
+        unit_splits,
+        new_unit_ids=new_unit_ids,
+        discard_spikes_unit_ids=discard_spikes_unit_ids,
+        new_id_strategy=new_id_strategy,
     )
     all_unit_ids = _get_ids_after_splitting(sorting.unit_ids, unit_splits, new_unit_ids)
     all_unit_ids = list(all_unit_ids)
@@ -791,7 +796,9 @@ def set_properties_after_splits(
     sorting_post_split.set_property("is_split", is_split)
 
 
-def generate_unit_ids_for_split(old_unit_ids, unit_splits, new_unit_ids=None, new_id_strategy="append"):
+def generate_unit_ids_for_split(
+    old_unit_ids, unit_splits, new_unit_ids=None, discard_spikes_unit_ids=None, new_id_strategy="append"
+):
     """
     Function to generate new units ids during a splitting procedure. If `new_units_ids`
     are provided, it will return these unit ids, checking that they are consistent with
@@ -806,6 +813,8 @@ def generate_unit_ids_for_split(old_unit_ids, unit_splits, new_unit_ids=None, ne
     new_unit_ids : list | None, default: None
         Optional new unit_ids for split units. If given, it needs to have the same length as `merge_unit_groups`.
         If None, new ids will be generated.
+    discard_spikes_unit_ids : list | None, default: None
+        List of units which contain spikes to discard.
     new_id_strategy : "append" | "split", default: "append"
         The strategy that should be used, if `new_unit_ids` is None, to create new unit_ids.
 
@@ -822,7 +831,8 @@ def generate_unit_ids_for_split(old_unit_ids, unit_splits, new_unit_ids=None, ne
     assert new_id_strategy in ["append", "split"], "new_id_strategy should be 'append' or 'split'"
     old_unit_ids = np.asarray(old_unit_ids)
 
-    if new_unit_ids is not None:
+    if new_unit_ids is not None and len(new_unit_ids) != 0:
+
         for split_unit, new_split_ids in zip(unit_splits.values(), new_unit_ids):
             # then only doing a consistency check
             assert len(split_unit) == len(new_split_ids), "new_unit_ids should have the same len as unit_splits.values"
@@ -830,36 +840,49 @@ def generate_unit_ids_for_split(old_unit_ids, unit_splits, new_unit_ids=None, ne
             assert all(
                 new_split_id not in old_unit_ids for new_split_id in new_split_ids
             ), "new_unit_ids already exists but outside the split groups"
-    else:
-        dtype = old_unit_ids.dtype
-        if np.issubdtype(dtype, np.integer) and new_id_strategy == "split":
-            warnings.warn("new_id_strategy 'split' is not compatible with integer unit_ids. Switching to 'append'.")
-            new_id_strategy = "append"
 
-        new_unit_ids = []
-        current_unit_ids = old_unit_ids.copy()
-        for unit_to_split, split_indices in unit_splits.items():
-            num_splits = len(split_indices)
-            # select new_unit_ids greater that the max id, event greater than the numerical str ids
-            if new_id_strategy == "append":
-                if np.issubdtype(dtype, np.character):
-                    # dtype str
-                    if all(p.isdigit() for p in current_unit_ids):
-                        # All str are digit : we can generate a max
-                        m = max(int(p) for p in current_unit_ids) + 1
-                        new_units_for_split = [str(m + i) for i in range(num_splits)]
-                    else:
-                        # we cannot automatically find new names
-                        new_units_for_split = [f"{unit_to_split}-split{i}" for i in range(num_splits)]
-                else:
-                    # dtype int
-                    new_units_for_split = list(max(current_unit_ids) + 1 + np.arange(num_splits, dtype=dtype))
-                # we append the new split unit ids to continue to increment the max id
-                current_unit_ids = np.concatenate([current_unit_ids, new_units_for_split])
-            elif new_id_strategy == "split":
-                # we made sure that dtype is not integer
-                new_units_for_split = [f"{unit_to_split}-{i}" for i in np.arange(len(split_indices))]
-            new_unit_ids.append(new_units_for_split)
+        return new_unit_ids
+
+    dtype = old_unit_ids.dtype
+    if np.issubdtype(dtype, np.integer) and new_id_strategy == "split":
+        warnings.warn("new_id_strategy 'split' is not compatible with integer unit_ids. Switching to 'append'.")
+        new_id_strategy = "append"
+
+    # If unit_ids are list of numeric strings, we will convert to int, use "append" code with int unit_ids, then convert back to string later
+    all_strings = False
+    if np.issubdtype(dtype, np.character):
+        if all(p.isdigit() for p in old_unit_ids):
+            all_strings = True
+            old_unit_ids = [int(unit_id) for unit_id in old_unit_ids]
+        else:
+            # we cannot automatically find new names
+            warnings.warn(
+                "new_id_strategy 'append' is not compatible with non-numeric string unit_ids. Switching to 'split'."
+            )
+            new_id_strategy = "split"
+
+    if new_id_strategy == "append":
+        next_max_unit_id = max(old_unit_ids) + 1
+        # highest_possible_unit_id = max(old_unit_ids)
+        # for split_indices in unit_splits.values():
+        #    highest_possible_unit_id += len(split_indices)
+
+    new_unit_ids = []
+    for unit_to_split, split_indices in unit_splits.items():
+        num_splits = len(split_indices)
+        # select new_unit_ids greater that the max id, event greater than the numerical str ids
+        if new_id_strategy == "append":
+            new_units_for_split = list(next_max_unit_id + np.arange(num_splits))
+            next_max_unit_id += len(new_units_for_split)
+            # we append the new split unit ids to continue to increment the max id
+        elif new_id_strategy == "split":
+            # we made sure that dtype is not integer
+            new_units_for_split = [f"{unit_to_split}-{i}" for i in np.arange(len(split_indices))]
+
+        new_unit_ids.append(new_units_for_split)
+
+    if all_strings:
+        new_unit_ids = [[str(unit_id) for unit_id in new_units_for_split] for new_units_for_split in new_unit_ids]
 
     return new_unit_ids
 
@@ -899,7 +922,7 @@ def check_unit_splits_consistency(unit_splits, sorting):
             )
 
 
-def _get_ids_after_splitting(old_unit_ids, split_units, new_unit_ids):
+def _get_ids_after_splitting(old_unit_ids, split_units, new_unit_ids, discard_unit_ids=None):
     """
     Function to get the list of unique unit_ids after some splits, with given new_units_ids would
     be provided.

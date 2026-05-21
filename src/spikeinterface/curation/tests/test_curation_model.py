@@ -303,7 +303,7 @@ def test_complete_model():
     }
 
     model = Curation(**complete_model_dict)
-    assert model.format_version == "2"
+    assert model.format_version == "3"
     assert len(model.unit_ids) == 5
     assert len(model.label_definitions) == 2
     assert len(model.manual_labels) == 1
