@@ -696,7 +696,7 @@ def apply_splits_to_sorting(
     # here we assume that unit_splits split_indices are already full.
     # this is true when running via apply_curation
 
-    new_unit_ids = generate_unit_ids_for_split(
+    new_unit_ids, discard_unit_ids = generate_unit_ids_for_split(
         sorting.unit_ids,
         unit_splits,
         new_unit_ids=new_unit_ids,
@@ -741,7 +741,7 @@ def apply_splits_to_sorting(
     )
 
     if return_extra:
-        return split_sorting, new_unit_ids
+        return split_sorting, new_unit_ids, discard_unit_ids
     else:
         return split_sorting
 
@@ -831,17 +831,18 @@ def generate_unit_ids_for_split(
     assert new_id_strategy in ["append", "split"], "new_id_strategy should be 'append' or 'split'"
     old_unit_ids = np.asarray(old_unit_ids)
 
-    if new_unit_ids is not None and len(new_unit_ids) != 0:
+    final_unit_ids = []
+    new_discard_unit_ids = []
+    if new_unit_ids is not None and len(new_unit_ids) > 0:
+        for split_unit, new_split_ids in zip(unit_splits.keys(), new_unit_ids):
+            if split_unit in discard_spikes_unit_ids:
+                # make the discard unit have the original unit_id, which we'll delete later
+                final_unit_ids.append([split_unit] + new_split_ids)
+                new_discard_unit_ids.append(split_unit)
+            else:
+                final_unit_ids.append(new_split_ids)
 
-        for split_unit, new_split_ids in zip(unit_splits.values(), new_unit_ids):
-            # then only doing a consistency check
-            assert len(split_unit) == len(new_split_ids), "new_unit_ids should have the same len as unit_splits.values"
-            # new_unit_ids can also be part of old_unit_ids only inside the same group:
-            assert all(
-                new_split_id not in old_unit_ids for new_split_id in new_split_ids
-            ), "new_unit_ids already exists but outside the split groups"
-
-        return new_unit_ids
+        return final_unit_ids, new_discard_unit_ids
 
     dtype = old_unit_ids.dtype
     if np.issubdtype(dtype, np.integer) and new_id_strategy == "split":
@@ -863,28 +864,50 @@ def generate_unit_ids_for_split(
 
     if new_id_strategy == "append":
         next_max_unit_id = max(old_unit_ids) + 1
-        # highest_possible_unit_id = max(old_unit_ids)
-        # for split_indices in unit_splits.values():
-        #    highest_possible_unit_id += len(split_indices)
+        highest_possible_unit_id = max(old_unit_ids)
+        for split_indices in unit_splits.values():
+            highest_possible_unit_id += len(split_indices)
 
-    new_unit_ids = []
     for unit_to_split, split_indices in unit_splits.items():
         num_splits = len(split_indices)
         # select new_unit_ids greater that the max id, event greater than the numerical str ids
         if new_id_strategy == "append":
-            new_units_for_split = list(next_max_unit_id + np.arange(num_splits))
-            next_max_unit_id += len(new_units_for_split)
-            # we append the new split unit ids to continue to increment the max id
-        elif new_id_strategy == "split":
-            # we made sure that dtype is not integer
-            new_units_for_split = [f"{unit_to_split}-{i}" for i in np.arange(len(split_indices))]
+            if unit_to_split not in discard_spikes_unit_ids:
+                # we append the new split unit ids to continue to increment the max id
+                new_units_for_split = list(next_max_unit_id + np.arange(num_splits))
+                next_max_unit_id += len(new_units_for_split)
 
-        new_unit_ids.append(new_units_for_split)
+            else:
+                if num_splits == 2:  # then it's just a discard unit
+                    # give the discard unit the highest possible id, leaving the cleaned unit's id untouched.
+                    new_units_for_split = [highest_possible_unit_id, unit_to_split]
+                    highest_possible_unit_id -= 1
+                    new_discard_unit_ids.append(highest_possible_unit_id)
+                else:  # this unit has been split and discarded
+                    # give the discard unit the id `unit_to_split`, and the other units their expected append ids
+                    new_units_for_split = [unit_to_split] + list(next_max_unit_id + np.arange(num_splits - 1))
+                    next_max_unit_id += len(new_units_for_split) - 1
+                    new_discard_unit_ids.append(unit_to_split)
+
+        elif new_id_strategy == "split":
+            if unit_to_split not in discard_spikes_unit_ids:
+                new_units_for_split = [f"{unit_to_split}-{i}" for i in np.arange(num_splits)]
+            else:
+                if num_splits == 2:  # then it's just a discard unit
+                    # Give the discard unit the name "{unit_to_split}-discard" and put at front
+                    new_units_for_split = [f"{unit_to_split}-discard"] + [unit_to_split]
+                    new_discard_unit_ids.append("{unit_to_split}-discard")
+                else:  # this unit has been split and discarded
+                    # Give the discard unit the name {unit_to_split} since that is not used by the newly split units
+                    new_units_for_split = [unit_to_split] + [f"{unit_to_split}-{i}" for i in np.arange(num_splits - 1)]
+                    new_discard_unit_ids.append(unit_to_split)
+
+        final_unit_ids.append(new_units_for_split)
 
     if all_strings:
-        new_unit_ids = [[str(unit_id) for unit_id in new_units_for_split] for new_units_for_split in new_unit_ids]
+        final_unit_ids = [[str(unit_id) for unit_id in new_units_for_split] for new_units_for_split in final_unit_ids]
 
-    return new_unit_ids
+    return final_unit_ids, new_discard_unit_ids
 
 
 def check_unit_splits_consistency(unit_splits, sorting):

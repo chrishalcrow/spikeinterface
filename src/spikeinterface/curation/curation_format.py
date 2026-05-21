@@ -285,7 +285,7 @@ def apply_curation(
                 split_units[unit_id] = split_units_with_discard
 
         if isinstance(sorting_or_analyzer, BaseSorting):
-            curated_sorting_or_analyzer, new_ids = apply_splits_to_sorting(
+            curated_sorting_or_analyzer, new_ids, new_discard_unit_ids = apply_splits_to_sorting(
                 curated_sorting_or_analyzer,
                 split_units,
                 new_id_strategy=new_id_strategy,
@@ -294,7 +294,7 @@ def apply_curation(
                 return_extra=True,
             )
         else:
-            curated_sorting_or_analyzer, new_ids = curated_sorting_or_analyzer.split_units(
+            curated_sorting_or_analyzer, new_ids, new_discard_unit_ids = curated_sorting_or_analyzer.split_units(
                 split_units,
                 new_id_strategy=new_id_strategy,
                 new_unit_ids=split_new_unit_ids_from_user,
@@ -304,13 +304,7 @@ def apply_curation(
                 return_new_unit_ids=True,
             )
 
-        if len(discard_spikes_unit_ids) > 0:
-            ids_to_remove = []
-            for new_id_set in new_ids:
-                if new_id_set[0] in discard_spikes_unit_ids or new_id_set[1] in discard_spikes_unit_ids:
-                    ids_to_remove.append(new_id_set[0])
-
-            curated_sorting_or_analyzer = curated_sorting_or_analyzer.remove_units(ids_to_remove)
+        curated_sorting_or_analyzer = curated_sorting_or_analyzer.remove_units(new_discard_unit_ids)
 
     # 4. Merge units
     if len(curation_model.merges) > 0:

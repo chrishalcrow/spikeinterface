@@ -26,10 +26,12 @@ dependencies = [
     "tqdm",
     "zarr>=2.18,<3",
     "neo>=0.14.4",
-    "probeinterface>=0.3.2",
     "packaging",
     "pydantic",
     "numcodecs<0.16.0", # For supporting zarr < 3
+    "probeinterface",
+    "pytest>=8.3.5",
+    "pandas>=2.3.3",
 ]
 
 [build-system]
@@ -363,3 +365,7 @@ filterwarnings =[
     'ignore:.*distutils Version classes are deprecated.*:DeprecationWarning',
     'ignore:.*the imp module is deprecated in favour of importlib.*:DeprecationWarning',
 ]
+
+[tool.uv.sources]
+neo = { path = "../python-neo" }
+probeinterface = { path = "../probeinterface" }

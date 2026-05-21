@@ -34,8 +34,6 @@ def test_discard_and_split():
 
     curated_sort = apply_curation(original_sort, discard_spikes_curation)
 
-    print(f"{curated_sort=}")
-
     for segment_index in [0, 1]:
 
         original_spike_train = original_sort.get_unit_spike_train(unit_id=0, segment_index=segment_index)

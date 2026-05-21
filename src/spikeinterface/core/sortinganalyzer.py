@@ -1376,7 +1376,7 @@ class SortingAnalyzer:
         folder: Path | str | None = None,
         verbose: bool = False,
         **job_kwargs,
-    ) -> "SortingAnalyzer | tuple[SortingAnalyzer, list[int | str]]":
+    ) -> "SortingAnalyzer | tuple[SortingAnalyzer, list[int | str], list[int | str]]":
         """
         This method is equivalent to `save_as()` but with a list of splits that have to be achieved.
         Split units by creating a new SortingAnalyzer object with the appropriate splits
@@ -1421,7 +1421,7 @@ class SortingAnalyzer:
 
         check_unit_splits_consistency(split_units, self.sorting)
 
-        new_unit_ids = generate_unit_ids_for_split(
+        new_unit_ids, discard_unit_ids = generate_unit_ids_for_split(
             self.unit_ids, split_units, new_unit_ids, discard_spikes_unit_ids, new_id_strategy
         )
         all_unit_ids = _get_ids_after_splitting(self.unit_ids, split_units, new_unit_ids=new_unit_ids)
@@ -1436,7 +1436,7 @@ class SortingAnalyzer:
             **job_kwargs,
         )
         if return_new_unit_ids:
-            return new_analyzer, new_unit_ids
+            return new_analyzer, new_unit_ids, discard_unit_ids
         else:
             return new_analyzer
 
