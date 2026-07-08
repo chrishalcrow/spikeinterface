@@ -10,6 +10,7 @@ dtype_localize_by_method = {
     "grid_convolution": [("x", "float64"), ("y", "float64"), ("z", "float64")],
     "peak_channel": [("x", "float64"), ("y", "float64")],
     "monopolar_triangulation": [("x", "float64"), ("y", "float64"), ("z", "float64"), ("alpha", "float64")],
+    "dartsort_localization": [("x", "float64"), ("y", "float64"), ("z", "float64")],
 }
 
 possible_localization_methods = list(dtype_localize_by_method.keys())

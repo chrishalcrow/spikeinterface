@@ -16,7 +16,7 @@ class ComputeSpikeLocations(BaseSpikeVectorExtension):
     spike_retriever_kwargs : dict
         Arguments to control the spike retriever behavior. See
         `spikeinterface.sortingcomponents.peak_localization.SpikeRetriever`.
-    method : "center_of_mass" | "monopolar_triangulation" | "grid_convolution", default: "center_of_mass"
+    method : "center_of_mass" | "monopolar_triangulation" | "grid_convolution" | "dartsort_localize", default: "center_of_mass"
         The localization method to use
     method_kwargs : dict, default: dict()
         Other kwargs depending on the method.
