@@ -40,6 +40,7 @@ from .sparsity import ChannelSparsity, estimate_sparsity
 from .sortingfolder import NumpyFolderSorting
 from .zarrextractors import get_default_zarr_compressor, ZarrSortingExtractor, super_zarr_open, _write_object_array
 from .node_pipeline import run_node_pipeline
+from .globals import get_global_job_kwargs
 
 
 # high level function
@@ -165,6 +166,26 @@ def create_sorting_analyzer(
     if sparsity_kwargs is None:
         sparsity_kwargs = dict()
 
+    # We deprecated **sparsity_kwargs in favour of sparsity_kwargs=None and added **job_kwargs.
+    # Now, in legacy code, sparsity kwargs will be been read in as job_kwargs.
+    # This code can be removed in v0.106.0
+    cleaned_job_kwargs = {}
+    display_warning = False
+    for key, value in job_kwargs.items():
+        if key not in get_global_job_kwargs():
+            sparsity_kwargs[key] = value
+            display_warning = True
+        else:
+            cleaned_job_kwargs[key] = value
+
+    if display_warning:
+        warnings.warn(
+            "Passing sparsity arguments via keyword arguments is deprecated. "
+            "Please pass them into the `sparsity_kwargs` dictionary instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
+
     if isinstance(sorting, dict) and isinstance(recording, dict):
 
         if sorting.keys() != recording.keys():
@@ -201,7 +222,7 @@ def create_sorting_analyzer(
                         peak_mode=peak_mode,
                         num_spikes_for_main_channel=num_spikes_for_main_channel,
                         seed=seed,
-                        **job_kwargs,
+                        **cleaned_job_kwargs,
                     )
                     sparsity_partial = estimate_sparsity(
                         sorting_single,
@@ -239,7 +260,7 @@ def create_sorting_analyzer(
             overwrite=overwrite,
             backend_options=backend_options,
             sparsity_kwargs=sparsity_kwargs,
-            **job_kwargs,
+            **cleaned_job_kwargs,
         )
 
     if format != "memory" and not is_path_remote(folder):
@@ -276,7 +297,7 @@ def create_sorting_analyzer(
             peak_mode=peak_mode,
             num_spikes_for_main_channel=num_spikes_for_main_channel,
             seed=seed,
-            **job_kwargs,
+            **cleaned_job_kwargs,
         )
 
     # handle sparsity
@@ -308,7 +329,7 @@ def create_sorting_analyzer(
     if return_scaled is not None:
         warnings.warn(
             "`return_scaled` is deprecated and will be removed in version 0.105.0. Use `return_in_uV` instead.",
-            category=DeprecationWarning,
+            category=FutureWarning,
             stacklevel=2,
         )
         return_in_uV = return_scaled
@@ -698,7 +719,7 @@ class SortingAnalyzer:
 
         Note :
          * see also _handle_backward_compatibility_settings_post_init
-         * there is also something at extension level to handle changes in paramaters with deferents mechanism
+         * there is also something at extension level to handle changes in parameters with deferents mechanism
         """
 
         new_settings = dict()
@@ -790,8 +811,9 @@ class SortingAnalyzer:
             from .template_tools import _get_main_channel_from_template_array
 
             main_channel_indices = _get_main_channel_from_template_array(
-                templates_array, peak_mode, peak_sign, templates.nbefore
+                templates_array, peak_mode=peak_mode, peak_sign=peak_sign, nbefore=templates.nbefore
             )
+            return main_channel_indices
 
         # Case 3
         if self.is_sparse():
@@ -1364,7 +1386,7 @@ class SortingAnalyzer:
             A dictionary with the keys being the unit ids to split and the values being the split indices.
         splitting_mode : "soft" | "hard", default: "soft"
             How splits are performed. In the "soft" mode, splits will be approximated, with no smart splitting.
-            If `splitting_mode` is "hard", the extensons for split units willbe recomputed.
+            If `splitting_mode` is "hard", the extensions for split units will be recomputed.
         split_new_unit_ids : list or None, default: None
             The new unit ids for split units. Required if `split_units` is not None.
         verbose : bool, default: False
@@ -1443,7 +1465,7 @@ class SortingAnalyzer:
         else:
             sparsity = None
 
-        # Note that the sorting is a copy we need to go back to the orginal sorting (if available)
+        # Note that the sorting is a copy we need to go back to the original sorting (if available)
         sorting_provenance = self.get_sorting_provenance()
         if sorting_provenance is None:
             # if the original sorting object is not available anymore (kilosort folder deleted, ....), take the copy
@@ -1604,7 +1626,7 @@ class SortingAnalyzer:
             The unit ids to keep in the new SortingAnalyzer object
         format : "memory" | "binary_folder" | "zarr" , default: "memory"
             The format of the returned SortingAnalyzer.
-        folder : Path | None, deafult: None
+        folder : Path | None, default: None
             The new folder where the analyzer with selected units is copied if `format` is
             "binary_folder" or "zarr"
 
@@ -1963,7 +1985,7 @@ class SortingAnalyzer:
         from .loading import load
 
         if self.format == "memory":
-            # the orginal sorting provenance is not keps in that case
+            # the original sorting provenance is not kept in that case
             sorting_provenance = None
 
         elif self.format == "binary_folder":
@@ -3058,7 +3080,7 @@ class AnalyzerExtension:
                 elif "object" in ext_data_.attrs:
                     ext_data = ext_data_[0]
                 else:
-                    # this load in memmory
+                    # this load in memory
                     ext_data = np.array(ext_data_)
                 self.set_data(ext_data_name, ext_data)
 

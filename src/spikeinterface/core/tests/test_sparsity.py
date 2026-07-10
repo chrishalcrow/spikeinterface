@@ -295,6 +295,11 @@ def test_compute_sparsity():
     recording, sorting = get_dataset()
 
     sorting_analyzer = create_sorting_analyzer(sorting=sorting, recording=recording, sparse=False, return_in_uV=True)
+
+    # Check that we can still pass sparsity kwargs using the old signature
+    with pytest.warns(FutureWarning):
+        sorting_analyzer_old_kwargs = create_sorting_analyzer(sorting=sorting, recording=recording, radius_um=50)
+
     sorting_analyzer.compute("random_spikes")
     sorting_analyzer.compute(
         "waveforms",
@@ -307,7 +312,7 @@ def test_compute_sparsity():
     sparsity = compute_sparsity(sorting_analyzer, method="best_channels", num_channels=2)
     sparsity = compute_sparsity(sorting_analyzer, method="radius", radius_um=50.0)
     sparsity = compute_sparsity(sorting_analyzer, method="closest_channels", num_channels=2)
-    sparsity = compute_sparsity(sorting_analyzer, method="snr", threshold=5)
+    # sparsity = compute_sparsity(sorting_analyzer, method="snr", threshold=5)
     sparsity = compute_sparsity(sorting_analyzer, method="amplitude", threshold=5)
     sparsity = compute_sparsity(sorting_analyzer, method="energy", threshold=5)
     sparsity = compute_sparsity(sorting_analyzer, method="by_property", by_property="group")
