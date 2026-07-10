@@ -9,6 +9,8 @@ from spikeinterface.core.node_pipeline import (
 from spikeinterface.sortingcomponents.peak_selection import select_peaks
 from spikeinterface.sortingcomponents.peak_detection import detect_peaks
 
+from spikeinterface.core import BaseRecording
+
 from spikeinterface.core.core_tools import ms_to_samples
 from spikeinterface.core.waveform_tools import extract_waveforms_to_single_buffer
 
@@ -80,10 +82,10 @@ class DartSortLocalize(LocalizeBase):
 
 
 def fit_dartsort_localizer_from_recording(
-    recording,
+    recording: BaseRecording,
     peaks,
-    n_peaks=1000,
-    sparse_num_channels=4,
+    n_peaks=10_000,
+    radius_um=50.0,
     ms_before=1,
     ms_after=2,
 ):
@@ -98,12 +100,11 @@ def fit_dartsort_localizer_from_recording(
     channel_locations = recording.get_channel_locations()
     distances = np.linalg.norm(channel_locations[:, np.newaxis] - channel_locations[np.newaxis, :], axis=2)
 
-    mask = np.full((num_channels, num_channels), False)
-
+    mask = np.zeros((num_channels, num_channels), dtype="bool")
+    distances = np.linalg.norm(channel_locations[:, np.newaxis] - channel_locations[np.newaxis, :], axis=2)
     for channel_index, _ in enumerate(channel_locations):
-        all_chan_indices = np.argsort(distances[channel_index])
-        closest_chan_inds = all_chan_indices[:sparse_num_channels]
-        mask[channel_index, closest_chan_inds] = True
+        (chan_inds,) = np.nonzero(distances[channel_index, :] <= radius_um)
+        mask[channel_index, chan_inds] = True
 
     spikes = np.zeros(
         selected_peaks.size, dtype=[("sample_index", "int64"), ("unit_index", "int64"), ("segment_index", "int64")]
@@ -130,18 +131,27 @@ def fit_dartsort_localizer_from_recording(
         job_name="extract_waveforms",
     )
 
-    geom = recording.get_channel_locations()
-    channel_indices = [recording.ids_to_indices(recording.channel_ids[one_channel_mask]) for one_channel_mask in mask]
+    neighboring_channels = [
+        recording.ids_to_indices(recording.channel_ids[one_channel_mask]) for one_channel_mask in mask
+    ]
+    peak_channel_indices = selected_peaks["channel_index"]
 
     localizer = fit_dartsort_localizer_from_waveforms(
-        all_wfs, geom, channel_indices, ms_before, ms_after, selected_peaks["channel_index"], recording
+        waveforms=all_wfs,
+        channel_locations=channel_locations,
+        neighboring_channels=neighboring_channels,
+        ms_before=ms_before,
+        ms_after=ms_after,
+        peak_channel_indices=peak_channel_indices,
+        radius_um=radius_um,
+        recording=recording,
     )
 
     return localizer
 
 
 def fit_dartsort_localizer_from_waveforms(
-    waveforms, geom, channel_indices, ms_before, ms_after, channel_index, recording
+    waveforms, channel_locations, neighboring_channels, ms_before, ms_after, peak_channel_indices, radius_um, recording
 ):
     """ """
 
@@ -154,13 +164,13 @@ def fit_dartsort_localizer_from_waveforms(
 
     waveform_cfg = WaveformConfig(ms_before=ms_before, ms_after=ms_after)
     amortized_localization = AmortizedLocalization(
-        channel_index=channel_indices, geom=geom, waveform_cfg=waveform_cfg, radius=100
+        channel_index=neighboring_channels, geom=channel_locations, waveform_cfg=waveform_cfg, radius=radius_um
     )
     amortized_localization.fit(
         recording=recording,
         waveforms=torch.from_numpy(waveforms),
         computation_cfg=computation_cfg,
-        channels=channel_index,
+        channels=torch.from_numpy(peak_channel_indices),
     )
 
     return amortized_localization
