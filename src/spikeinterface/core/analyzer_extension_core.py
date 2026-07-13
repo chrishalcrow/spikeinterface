@@ -244,16 +244,40 @@ class ComputeWaveforms(AnalyzerExtension):
         return params
 
     def _select_units_extension_data(self, unit_ids):
-        # random_spikes_indices = self.sorting_analyzer.get_extension("random_spikes").get_data()
         some_spikes = self.sorting_analyzer.get_extension("random_spikes").get_random_spikes()
 
         keep_unit_indices = np.flatnonzero(np.isin(self.sorting_analyzer.unit_ids, unit_ids))
-        spikes = self.sorting_analyzer.sorting.to_spike_vector()
-        # some_spikes = spikes[random_spikes_indices]
         keep_spike_mask = np.isin(some_spikes["unit_index"], keep_unit_indices)
 
         new_data = dict()
         new_data["waveforms"] = self.data["waveforms"][keep_spike_mask, :, :]
+
+        return new_data
+
+    def _select_channels_extension_data(self, channel_ids):
+
+        print(f"{self.sorting_analyzer=}")
+
+        new_data = dict()
+        waveforms = self.get_data()
+        max_sparsity = waveforms.shape[2]
+
+        random_spikes = self.sorting_analyzer.get_extension("random_spikes").get_random_spikes()
+
+        unit_id_to_channel_ids = self.sorting_analyzer.sparsity.unit_id_to_channel_ids
+        new_waveforms = np.zeros_like(waveforms)
+        for waveform_index, (waveform, unit_index) in enumerate(zip(waveforms, random_spikes["unit_index"])):
+            unit_id = self.sorting_analyzer.unit_ids[unit_index]
+            waveform_channels = unit_id_to_channel_ids[unit_id]
+            channel_in_waveform = np.zeros(max_sparsity, dtype=bool)
+            channel_in_waveform[: len(waveform_channels)] = np.isin(waveform_channels, channel_ids)
+            num_kept_channels = np.sum(channel_in_waveform)
+            if num_kept_channels > 0:
+                new_waveform = waveform[:, channel_in_waveform]
+                new_waveforms[waveform_index, :, :num_kept_channels] = new_waveform
+
+        new_data = dict()
+        new_data["waveforms"] = np.array(new_waveforms)
 
         return new_data
 
