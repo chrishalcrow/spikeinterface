@@ -262,6 +262,7 @@ class ComputeWaveforms(AnalyzerExtension):
         unit_ids = self.sorting_analyzer.unit_ids
         old_unit_id_to_channel_ids = self.sorting_analyzer.sparsity.unit_id_to_channel_ids
 
+        # Compute how to slice the original sparsity to get the newly selected sparsity
         unit_sparsity_slices = {}
         for unit_id in unit_ids:
             channel_indices = []
@@ -278,9 +279,8 @@ class ComputeWaveforms(AnalyzerExtension):
 
         new_waveforms = np.zeros_like(old_waveforms)
         max_num_active_channels = 0
-        for waveform_index, (waveform, spike) in enumerate(zip(old_waveforms, random_spikes)):
+        for waveform_index, (waveform, unit_index) in enumerate(zip(old_waveforms, random_spikes["unit_index"])):
 
-            unit_index = spike["unit_index"]
             unit_id = unit_ids[unit_index]
             channel_slice = unit_sparsity_slices[unit_id]
 

@@ -103,6 +103,7 @@ class ComputePrincipalComponents(AnalyzerExtension):
         unit_ids = self.sorting_analyzer.unit_ids
         old_unit_id_to_channel_ids = self.sorting_analyzer.sparsity.unit_id_to_channel_ids
 
+        # Compute how to slice the original sparsity to get the newly selected sparsity
         unit_sparsity_slices = {}
         for unit_id in unit_ids:
             channel_indices = []
@@ -119,9 +120,8 @@ class ComputePrincipalComponents(AnalyzerExtension):
 
         new_pcs = np.zeros_like(old_pcs)
         max_num_active_channels = 0
-        for pc_index, (old_pc, spike) in enumerate(zip(old_pcs, random_spikes)):
+        for pc_index, (old_pc, unit_index) in enumerate(zip(old_pcs, random_spikes["unit_index"])):
 
-            unit_index = spike["unit_index"]
             unit_id = unit_ids[unit_index]
             channel_slice = unit_sparsity_slices[unit_id]
 
