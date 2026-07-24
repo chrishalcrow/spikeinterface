@@ -125,10 +125,12 @@ class ComputePrincipalComponents(AnalyzerExtension):
             unit_id = unit_ids[unit_index]
             channel_slice = unit_sparsity_slices[unit_id]
 
-            size_of_new_mask = len(channel_slice)
-            new_pcs[pc_index, :, :size_of_new_mask] = old_pc[:, channel_slice]
+            if len(channel_slice) > 0:
 
-            max_num_active_channels = max(max_num_active_channels, size_of_new_mask)
+                size_of_new_mask = len(channel_slice)
+                new_pcs[pc_index, :, :size_of_new_mask] = old_pc[:, channel_slice]
+
+                max_num_active_channels = max(max_num_active_channels, size_of_new_mask)
 
         data = {"pca_projection": new_pcs[:, :, :max_num_active_channels]}
 

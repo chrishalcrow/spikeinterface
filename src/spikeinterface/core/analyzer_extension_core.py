@@ -284,10 +284,12 @@ class ComputeWaveforms(AnalyzerExtension):
             unit_id = unit_ids[unit_index]
             channel_slice = unit_sparsity_slices[unit_id]
 
-            size_of_new_mask = len(channel_slice)
-            new_waveforms[waveform_index, :, :size_of_new_mask] = waveform[:, channel_slice]
+            if len(channel_slice) > 0:
 
-            max_num_active_channels = max(max_num_active_channels, size_of_new_mask)
+                size_of_new_mask = len(channel_slice)
+                new_waveforms[waveform_index, :, :size_of_new_mask] = waveform[:, channel_slice]
+
+                max_num_active_channels = max(max_num_active_channels, size_of_new_mask)
 
         data = {"waveforms": new_waveforms[:, :, :max_num_active_channels]}
 
