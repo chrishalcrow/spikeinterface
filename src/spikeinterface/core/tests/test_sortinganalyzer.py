@@ -842,7 +842,7 @@ def test_select_channels_sparse_waveforms_pca(dataset):
         zip(sorting_analyzer.channel_ids, sorting_analyzer.channel_ids_to_indices(sorting_analyzer.channel_ids))
     )
     selected_id_index_map = dict(
-        zip(sorting_analyzer.channel_ids, analyzer_seleted.channel_ids_to_indices(analyzer_seleted.channel_ids))
+        zip(analyzer_seleted.channel_ids, analyzer_seleted.channel_ids_to_indices(analyzer_seleted.channel_ids))
     )
 
     original_templates = sorting_analyzer.get_extension("templates").get_data()
