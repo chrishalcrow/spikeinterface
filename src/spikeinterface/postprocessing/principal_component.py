@@ -132,6 +132,10 @@ class ComputePrincipalComponents(AnalyzerExtension):
 
         data = {"pca_projection": new_waveforms[:, :, :max_num_active_channels]}
 
+        for key, value in self.data.items():
+            if key != "pca_projection":
+                data[key] = value
+
         return data
 
     def _merge_extension_data(

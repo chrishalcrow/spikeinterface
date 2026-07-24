@@ -817,12 +817,85 @@ def test_select_channels(dataset):
         assert len(p) == len(keep_channel_ids)
 
 
+def test_select_channels_sparse_waveforms_pca(dataset):
+    """
+    Test that `_select_channels` selects the correct waveforms and principal components when the analyzer
+    is sparse.
+
+    The actual code uses fancy indexing etc, so this test is designed to _not_ do this, and instead
+    just loop over all units and channels to check consistency.
+    """
+
+    recording, sorting = dataset
+    # Make a sparse analyzer
+    sorting_analyzer = create_sorting_analyzer(
+        sorting, recording, format="memory", sparse=True, sparsity_kwargs={"method": "radius", "radius_um": 30}
+    )
+    sorting_analyzer.compute(["random_spikes", "waveforms", "principal_components", "templates"])
+
+    # Select channels, in a non-monotonic way
+    select_channel_ids = np.array(["3", "8", "7"])
+    analyzer_seleted = sorting_analyzer._select_channels(channel_ids=select_channel_ids)
+
+    # Prepare the data
+    original_id_index_map = dict(
+        zip(sorting_analyzer.channel_ids, sorting_analyzer.channel_ids_to_indices(sorting_analyzer.channel_ids))
+    )
+    selected_id_index_map = dict(
+        zip(sorting_analyzer.channel_ids, analyzer_seleted.channel_ids_to_indices(analyzer_seleted.channel_ids))
+    )
+
+    original_templates = sorting_analyzer.get_extension("templates").get_data()
+    selected_templates = analyzer_seleted.get_extension("templates").get_data()
+
+    original_waveforms = sorting_analyzer.get_extension("waveforms")
+    selected_waveforms = analyzer_seleted.get_extension("waveforms")
+
+    original_pca = sorting_analyzer.get_extension("principal_components")
+    selected_pca = analyzer_seleted.get_extension("principal_components")
+
+    for unit_index, unit_id in enumerate(sorting_analyzer.unit_ids):
+
+        original_units_to_channels = sorting_analyzer.sparsity.unit_id_to_channel_ids[unit_id]
+        selected_units_to_channels = analyzer_seleted.sparsity.unit_id_to_channel_ids[unit_id]
+
+        original_waveforms_one_unit = original_waveforms.get_waveforms_one_unit(unit_id)
+        selected_waveforms_one_unit = selected_waveforms.get_waveforms_one_unit(unit_id)
+
+        original_pca_one_unit, _ = original_pca.get_projections_one_unit(unit_id, sparse=True)
+        selected_pca_one_unit, _ = selected_pca.get_projections_one_unit(unit_id, sparse=True)
+
+        for channel_id in select_channel_ids:
+            if channel_id in original_units_to_channels:
+
+                # Check templates, which are dense
+                original_channel_index = original_id_index_map[channel_id]
+                selected_channel_index = selected_id_index_map[channel_id]
+
+                original_channel = original_templates[unit_index, :, original_channel_index]
+                selected_channel = selected_templates[unit_index, :, selected_channel_index]
+
+                assert np.all(original_channel == selected_channel)
+
+                # Now check waveforms and PCs, which are sparse
+                channel_index_in_original = np.where(original_units_to_channels == channel_id)[0][0]
+                original_unit_waveform = original_waveforms_one_unit[:, :, channel_index_in_original]
+                original_unit_pca = original_pca_one_unit[:, :, channel_index_in_original]
+
+                channel_index_in_selected = np.where(selected_units_to_channels == channel_id)[0][0]
+                selected_unit_waveform = selected_waveforms_one_unit[:, :, channel_index_in_selected]
+                selected_unit_pca = selected_pca_one_unit[:, :, channel_index_in_selected]
+
+                assert np.all(original_unit_waveform == selected_unit_waveform)
+                assert np.all(original_unit_pca == selected_unit_pca)
+
+
 def test_select_channels_independent(dataset):
     """
     Test that `_select_channels` is independent of channel id order.
     """
     recording, sorting = dataset
-    # Make a very sparse analyzer
+    # Make a sparse analyzer
     sorting_analyzer = create_sorting_analyzer(
         sorting, recording, format="memory", sparse=True, sparsity_kwargs={"method": "radius", "radius_um": 30}
     )
